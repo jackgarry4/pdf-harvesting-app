@@ -1,0 +1,13 @@
+# Virtual Environment
+venv/
+env/
+
+# .venv (commonly used by poetry)
+.venv/
+
+# venv virtual environment
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+*.db
