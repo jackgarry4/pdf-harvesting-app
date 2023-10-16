@@ -1,4 +1,5 @@
 class Company:
+    
     def __init__(self,name, planParticipants = 0, assets = 0):
         self.name = name
         self.pdfs = []
