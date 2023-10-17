@@ -1,6 +1,7 @@
 # Virtual Environment
 venv/
 env/
+docs/
 
 # .venv (commonly used by poetry)
 .venv/
