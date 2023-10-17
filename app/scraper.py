@@ -1,4 +1,5 @@
 from cgitb import text
+from xml.etree.ElementTree import TreeBuilder
 from bs4 import BeautifulSoup
 from ..classes.Company import Company
 from ..classes.PDF import PDF
@@ -9,7 +10,7 @@ import re
 
 #Make HTTP request and return HTML response as String
 def fetchDataFromURL(url):
-    #Make HTTP request to provided url
+    #Make HTTP request to provided url and make sure it is from TransAmerica
     try:
         pageData = requests.get(url)
         pageData.raise_for_status()
@@ -21,6 +22,8 @@ def fetchDataFromURL(url):
         print("Timeout Error:",errt)
     except requests.exceptions.RequestException as e: 
         print("Oops: Something else", e)
+    except AttributeError as e:
+        print ("FUCK")
     return pageData.text
 
 #Extract the company name from the html and return
@@ -59,11 +62,18 @@ def extractPDFs(company, doc):
     return company
 
 
+#Check HTML elements to make sure the page that is being parsed is indeed a TA page
+def isValidTAPage(doc):
+    if (doc.head.title.string == "Fund and Fee Information"):
+        return True
+    else:
+        return False
+
+
 
 
 #Create Company object from the provided TransAmerica company specific html script
-def scrapeCompanyPage(html):
-    doc = BeautifulSoup(html, 'html.parser')
+def scrapeCompanyPage(doc):
     company = Company(extractCompanyName(doc))
     if (company.name is None):
         company.active = False
@@ -73,10 +83,14 @@ def scrapeCompanyPage(html):
 
 
 
-#From provided url fetch the 
+#From provided url fetch the pdfs
 def scrape_pdf_links(homePageUrl):
     pageHTML = fetchDataFromURL(homePageUrl)
-    company = scrapeCompanyPage(pageHTML)
-    return company
+    doc = BeautifulSoup(pageHTML, 'html.parser')
+    #Check if page is TA page
+    if (isValidTAPage(doc)):
+        return scrapeCompanyPage(doc)
+    else:
+       return Company(homePageUrl, active = False) 
 
 
