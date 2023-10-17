@@ -4,7 +4,6 @@ from ..classes.Company import Company
 from ..classes.PDF import PDF
 import requests 
 import re
-import webbrowser
 
 
 
@@ -55,9 +54,9 @@ def extractPDFs(company, doc):
     for a in anchorInstances:
         pdfUrlJS = a['href'] #javascript that will open the url.  Need to pass through RegEx to obtain only URL
         pdfUrl = extractUrlFromExpression(pdfUrlJS)
-        print(pdfUrl)
         pdfTitle = a.li.string
-        pdf = PDF("", pdfTitle)
+        pdf = PDF(pdfUrl, pdfTitle)
+        company.add_pdf(pdf)
     return company
 
 
@@ -67,8 +66,10 @@ def extractPDFs(company, doc):
 def scrapeCompanyPage(html):
     doc = BeautifulSoup(html, 'html.parser')
     company = Company(extractCompanyName(doc))
-    extractPDFs(company, doc)
-    
+    if (company.name is None):
+        company.active = False
+    else: 
+        company = extractPDFs(company, doc)
     return company
 
 
@@ -82,8 +83,13 @@ def scrape_pdf_links(homePageUrl):
 
 
 def main():
-    url = "https://fp.trsretire.com/PublicFP/fpClient.jsp?c=TT069026&a=00001&l=TDA&p=mhs"
-    return scrape_pdf_links(url)
+    url_inactive = "https://fp.trsretire.com/PublicFP/fpClient.jsp?c=TA08200&a=00001&l=TDA&p=mhs"
+    url_active_PCI = "https://fp.trsretire.com/PublicFP/fpClient.jsp?c=QK62032&a=00001&l=TDA&p=mhs"
+    url_active = "https://fp.trsretire.com/PublicFP/fpClient.jsp?c=TT069026&a=00001&l=TDA&p=mhs"
+    company = scrape_pdf_links(url_active_PCI)
+    print(company.active)
+    print(company)
+    return company
 
     
 

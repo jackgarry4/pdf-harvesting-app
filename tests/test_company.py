@@ -1,5 +1,6 @@
 import unittest
 from classes.Company import Company
+from classes.PDF import PDF
 
 class TestCompany(unittest.TestCase):
     def setUp(self):
@@ -16,6 +17,16 @@ class TestCompany(unittest.TestCase):
         self.assertEqual(self.company2.name, "Cintas")
         self.assertEqual(self.company2.planParticipants, 150)
         self.assertEqual(self.company2.assets, 45000000)
+
+    def test_adding_pdf_links(self):
+        pdf1 = PDF("pdf1.pdf")
+        pdf2 = PDF("pdf2.pdf")
+        self.company1.add_pdf(pdf1)
+        self.assertEqual(self.company1.pdfs, [pdf1])
+
+        self.company2.add_pdf(pdf1)
+        self.company2.add_pdf(pdf2)
+        self.assertEqual(self.company2.pdfs, [pdf1, pdf2])
 
     
 

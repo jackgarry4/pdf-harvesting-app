@@ -1,14 +1,19 @@
+from .PDF import PDF
+
 class Company:
-    
-    def __init__(self,name, planParticipants = 0, assets = 0):
+
+    def __init__(self,name, planParticipants = 0, assets = 0, active = True):
         self.name = name
         self.pdfs = []
         self.planParticipants = planParticipants
         self.assets = assets
+        self.active = active
 
-
-    def add_pdf_link(self, pdf_link):
-        self.pdfs.append(pdf_link)
+    def add_pdf(self, pdf):
+        self.pdfs.append(pdf)
     
     def __str__(self):
-        return f"{self.name}: {', '.join(self.pdfs)}"
+        output = f"{self.name}: " 
+        for pdf in self.pdfs:
+            output= output + pdf.__str__() 
+        return output
