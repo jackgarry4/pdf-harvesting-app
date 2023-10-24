@@ -41,7 +41,17 @@ def fetchDataFromURL(url):
 
 #Extract the company name from the html and return
 def extractCompanyName(doc):
-    #MAY HAVE TO ADD TRY/EXCEPT IN CASES WHERE THE DOCUMENTS DO NOT EXIST 
+    """
+    Extract and return company name from HTML document if present.
+
+    Parameters:
+    - doc (BeautifulSoup): The BeautifulSoup object representing the HTML document.
+
+    Returns:
+        Either doc.h2.b.string or None:
+            - doc.h2.b.string - Returned if doc is an active TransAmerica document.  Represents the name of the company that the doc HTML points to.
+            - None - Returned if doc is not an active TransAmerica document and brings up attribute error when trying to find doc.h2.b.string
+    """
     try:
         return doc.h2.b.string
     except AttributeError as e:
@@ -51,6 +61,15 @@ def extractCompanyName(doc):
 
 #Extract URL using reg ex from JS openWindow method call
 def extractUrlFromExpression(pdfUrlJS):
+    """
+    Extract URL using regex from JavaScript openWindow method call.
+
+    Parameters:
+    - pdfUrlJS (str): The JavaScript expression containing the openWindow method call.
+
+    Returns:
+    - str or None: The extracted URL or None if no match is found.
+    """
     #Define regex to match the url
     urlRegex = r"openWindow\('([^']+)"
 
@@ -67,11 +86,24 @@ def extractUrlFromExpression(pdfUrlJS):
 
 
 def extractPDFs(company, doc):
+    """
+    Extract PDF information from the provided HTML document and add PDF objects to the given company.
+
+    Parameters:
+    - company (Company): The Company object to which the extracted PDFs will be added.
+    - doc (BeautifulSoup): The BeautifulSoup object representing the HTML document.
+
+    Returns:
+    - Company: The Company object with the added PDFs.
+
+    This method searches for the 'planDocuments' section in the HTML document and extracts PDF information
+    from the anchor tags within that section. For each anchor tag, it obtains the PDF URL and title, creates
+    a PDF object, and adds it to the provided Company.
+    """
     planDocsHTML = doc.find(id='planDocuments')
     anchorInstances = planDocsHTML.find_all('a')
-    #FOREACH to run through each a instance and build PDF object and append to companies.pdf
     for a in anchorInstances:
-        pdfUrlJS = a['href'] #javascript that will open the url.  Need to pass through RegEx to obtain only URL
+        pdfUrlJS = a['href']
         pdfUrl = extractUrlFromExpression(pdfUrlJS)
         pdfTitle = a.find('li').text
         pdf = PDF(pdfUrl, pdfTitle)
