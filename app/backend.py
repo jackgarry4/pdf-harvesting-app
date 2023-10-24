@@ -1,8 +1,8 @@
 from .scraper import scrape_pdf_links
 import pandas as pd
 import openpyxl
-
-
+import requests
+import logging
 
 
 #Takes excel file path containing TA urls as input and returns list of lists with each list containing urls for that indexed excel sheet
@@ -24,22 +24,36 @@ def process_urls(taUrls, xls):
         current_sheet = xls.sheet_names[ind]
         df = pd.read_excel(xls, sheet_name = current_sheet)
         for url in sheetList:
-            company = scrape_pdf_links(url)
-            #Find company by url in xlsPath and write status to excel file
+            logging.info(f"Scraping {url}")
+            companyTuple = scrape_pdf_links(url)
+            logging.info(f"Scraped {url}")
+
             url_index = df.index[df['URL'] == url][0]
-            df.at[url_index, 'Active'] = company.active
-            if (company.active):
-                companies.append(company)
-        df.to_excel(xls, sheet_name = current_sheet, index=False)
+
+            if companyTuple[0] is not None:
+                #Find company by url in xlsPath and write status to excel file
+                df.at[url_index, 'Active'] = "True"
+                companies.append(companyTuple[0])
+            else:
+                df.at[url_index, 'Active'] = companyTuple[1]
+        try:
+            df.to_excel(xls, sheet_name = current_sheet, index=False)
+            logging.info(f"File for {current_sheet} saved successfully")
+        except PermissionError as e:
+            logging.error(f'PermissionError: {e}')
+            print(f"PermissionError: The file is open in another application")
     return companies
 
-
-def main():
-    xlPath = 'C:/Users/Computer/OneDrive - The Ohio State University/Documents/Mosby Project/pdf-harvesting-app/docs/Formatted TA URLs.xlsx'
+def extract_excel(xlPath):
     with pd.ExcelFile(xlPath) as xls: 
         taUrls = get_TA_urls(xls)
         companies = process_urls(taUrls, xls)
         return companies
+
+
+def main():
+    xlPath = 'C:/Users/Computer/OneDrive - The Ohio State University/Documents/Mosby Project/pdf-harvesting-app/docs/Formatted TA URLs.xlsx'
+    return extract_excel(xlPath)
 
 if __name__ == "__main__":
     main()

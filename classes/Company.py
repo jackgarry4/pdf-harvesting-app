@@ -2,7 +2,7 @@ from .PDF import PDF
 
 class Company:
 
-    def __init__(self,name, planParticipants = 0, assets = 0, active = True):
+    def __init__(self, name, planParticipants = 0, assets = 0, active = True):
         self.name = name
         self.pdfs = []
         self.planParticipants = planParticipants
