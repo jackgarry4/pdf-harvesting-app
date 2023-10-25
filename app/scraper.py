@@ -128,7 +128,6 @@ def scrape_pdf_links(homePageUrl, session):
       - If there's an error during the HTTP request or parsing, the first element is None, and the second
         element is an error message describing the issue.
     """
-    print(f"Scraping {homePageUrl}")
     logging.info(f"Scraping {homePageUrl}")
     pageHTML = fetchDataFromURL(homePageUrl, session)
     if pageHTML["error"] is None:
