@@ -9,8 +9,9 @@ import re
 import logging
 
 
+#Create a Session object
 
-def fetchDataFromURL(url):
+def fetchDataFromURL(url, session):
     """
     Make an HTTP request to the provided URL and return the HTML response as a string.
 
@@ -22,7 +23,7 @@ def fetchDataFromURL(url):
             and 'error' containing the error message (if an error occurs).
     """
     try:
-        pageData = requests.get(url)
+        pageData = session.get(url)
         pageData.raise_for_status()
         return {'data': pageData.text, 'error': None}
     except requests.exceptions.HTTPError as errh:
@@ -112,7 +113,7 @@ def extractPDFs(company, doc):
 
 
 
-def scrape_pdf_links(homePageUrl):
+def scrape_pdf_links(homePageUrl, session):
     """
     Scrape PDF links from a TransAmerica (TA) page.
 
@@ -127,17 +128,22 @@ def scrape_pdf_links(homePageUrl):
       - If there's an error during the HTTP request or parsing, the first element is None, and the second
         element is an error message describing the issue.
     """
-    pageHTML = fetchDataFromURL(homePageUrl)
+    print(f"Scraping {homePageUrl}")
+    logging.info(f"Scraping {homePageUrl}")
+    pageHTML = fetchDataFromURL(homePageUrl, session)
     if pageHTML["error"] is None:
         doc = BeautifulSoup(pageHTML["data"], 'html.parser')
         docTitle = doc.head.title.string
         companyName = extractCompanyName(doc)
         if docTitle == "Fund and Fee Information" and companyName is not None:
             company = Company(companyName)
+            logging.info(f"Scraped {homePageUrl}")
             return extractPDFs(company, doc), None
         else:
+            logging.info(f"Scraped {homePageUrl}")
             return None, "This page does not appear to be a valid TA Page"
     else:
+        logging.info(f"Scraped {homePageUrl}")
         return None, "Error fetching HTML: {pageHTML['error']}"
 
 
