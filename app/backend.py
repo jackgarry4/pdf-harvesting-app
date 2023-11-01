@@ -6,9 +6,10 @@ import requests
 import logging
 import concurrent.futures
 import time
+import re
 
 
-def get_TA_urls(xls):
+def getTaURLs(xls):
     """
     Takes an Excel file path containing TA URLs as input and returns the urls contained in the Excel as a list of lists.
     
@@ -29,7 +30,7 @@ def get_TA_urls(xls):
 
 
 
-def process_urls(taUrls, xls, session):
+def processURLs(taUrls, xls, session):
     """
     Process TransAmerica URLs concurrently, scrape PDF links, and update an Excel file.
 
@@ -62,6 +63,7 @@ def process_urls(taUrls, xls, session):
                 url_index = df.index[df['URL'] == url][0]
                 companyTuple = future.result()
 
+
                 if companyTuple[0] is not None:
                     #Find company by url in xlsPath and write status to excel file
                     df.at[url_index, 'Active'] = "True"
@@ -82,7 +84,7 @@ def process_urls(taUrls, xls, session):
     return companies
 
 
-def extract_excel(xlPath):
+def extractExcel(xlPath):
     """
     Extract data from a TransAmerica Excel file.
 
@@ -98,19 +100,47 @@ def extract_excel(xlPath):
     List[Company] or None: A list of Company objects if extraction is successful, or None in case of an error.
     """
     try:
-        with requests.Sesssion() as session, pd.ExcelFile(xlPath) as xls: 
-            taUrls = get_TA_urls(xls)
-            companies = process_urls(taUrls, xls, session)
+        with requests.Session() as session, pd.ExcelFile(xlPath) as xls: 
+            taUrls = getTaURLs(xls)
+            companies = processURLs(taUrls, xls, session)
         return companies
     except Exception as e:
         logging.exception(f"Error extracting data from Excel file {xlPath}: {e}")
         return None
-    
 
+    
+def generateOutputXlPath(inputPath):
+    outputPath = re.match(r"^(.*?)/[^/]+$", inputPath).group(1)
+    return outputPath+"/ScrapedPDFs.xlsx"
+
+def saveCompanyPDFs(companies, outputPath):
+    df = pd.DataFrame(columns=['Company', 'PDF Title', 'PDF URL', 'Assets', 'Number of Participants', 'Source'])
+    for company in companies:
+        for pdf in company.pdfs:
+            d = {'Company' : company.name, 'PDF Title': pdf.title, 'PDF URL': pdf.url, 'Assets' : 0, 'Number of Participants': 0, 'Source' : pdf.source}
+            dfVal = pd.DataFrame(data = [d], columns=['Company', 'PDF Title', 'PDF URL', 'Assets', 'Number of Participants', 'Source'])
+            df= pd.concat([df, dfVal], ignore_index=True)
+            df.reset_index(drop=True, inplace = True)
+    
+    df.to_excel(outputPath)
+    return None
+
+
+def generatePDFPage(inputPath):
+    inputPath = 'C:/Users/Computer/OneDrive - The Ohio State University/Documents/Mosby Project/pdf-harvesting-app/docs/Formatted TA URLs.xlsx'
+    companies = extractExcel(inputPath)
+    outputPath = generateOutputXlPath(inputPath)
+    saveCompanyPDFs(companies, outputPath)
+
+def savePDFPages(inputPath):
+    #Save PDF pages on excel document to local directory
+    return None
 
 def main():
-    xlPath = 'C:/Users/Computer/OneDrive - The Ohio State University/Documents/Mosby Project/pdf-harvesting-app/docs/Formatted TA URLs.xlsx'
-    return extract_excel(xlPath)
+    #inputPath = 'C:/Users/Computer/OneDrive - The Ohio State University/Documents/Mosby Project/pdf-harvesting-app/docs/Formatted TA URLs.xlsx'
+    #generatePDFPage(inputPath)
+    inputPath = 'C:\Users\Computer\OneDrive - The Ohio State University\Documents\Mosby Project\pdf-harvesting-app\docs\ScrapedPDFs.xlsx'
+    savePDFPages(inputPath)
 
 if __name__ == "__main__":
     main()

@@ -1,5 +1,3 @@
-from cgitb import text
-from uu import Error
 from xml.etree.ElementTree import TreeBuilder
 from bs4 import BeautifulSoup
 from ..classes.Company import Company
@@ -137,7 +135,11 @@ def scrape_pdf_links(homePageUrl, session):
         if docTitle == "Fund and Fee Information" and companyName is not None:
             company = Company(companyName)
             logging.info(f"Scraped {homePageUrl}")
-            return extractPDFs(company, doc), None
+            company = extractPDFs(company, doc)
+            if len(company.pdfs) == 0:
+                return None, "This page does not contain any Plan Documents"
+            else: 
+                return company, None
         else:
             logging.info(f"Scraped {homePageUrl}")
             return None, "This page does not appear to be a valid TA Page"
