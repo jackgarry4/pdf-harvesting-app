@@ -54,7 +54,7 @@ def extractCompanyName(doc):
     try:
         return doc.h2.b.string
     except AttributeError as e:
-        logging.warning(f'Attribute error in extractCompanyName: {e}')
+        logging.info(f'Attribute error in extractCompanyName: {e}')
         return None
     
 
@@ -142,6 +142,7 @@ def scrape_pdf_links(homePageUrl, session):
                 return company, None
         else:
             logging.info(f"Scraped {homePageUrl}")
+            logging.info(f"{doc.prettify()}")
             return None, "This page does not appear to be a valid TA Page"
     else:
         logging.info(f"Scraped {homePageUrl}")

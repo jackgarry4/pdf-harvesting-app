@@ -1,11 +1,13 @@
 from asyncio import as_completed
 from .scraper import scrape_pdf_links
+from ..config.logging_config import configure_logging
+from urllib.error import URLError, HTTPError
+from http.client import RemoteDisconnected
 import pandas as pd
 import requests
 import logging
 import concurrent.futures
 import time
-import re
 import urllib.request
 import os
 from pathlib import Path
@@ -81,7 +83,7 @@ def processURLs(taUrls, xls, session):
                     df.at[url_index, 'Active'] = "True"
                     companies.append(companyTuple[0])
                 else:
-                    df.at[url_index, 'Active'] = companyTuple[1]
+                    df.at[url_index, 'Active'] = str(companyTuple[1])
         except Exception as e:
             logging.error(f"Error scraping")
             continue
@@ -141,14 +143,27 @@ def generatePDFPage(inputPath):
     saveCompanyPDFs(companies, outputPath)
 
 
+def downloadPDF(pdfURL,filePath, maxRetries = 3, retryDelay = 1):
+    retries = 0
+    while retries < maxRetries:
+        try:
+            with urllib.request.urlopen(pdfURL) as response, open(filePath, 'wb') as out_file:
+                data = response.read()
+                out_file.write(data)
+            return True
+        except (URLError, HTTPError, RemoteDisconnected) as e:
+            logging.error(e)
+            retries += 1
+            time.sleep(retryDelay)
+    return False
 
-def savePDFPages(inputPath):
+def extractPDFPages(inputPath):
     #Save PDF pages on excel document to local directory
     with pd.ExcelFile(inputPath) as xls:
         for sheet in xls.sheet_names:
             df = pd.read_excel(xls, sheet_name = sheet)
             localFilePaths = []
-            for pdfUrl, pdfTitle, company in zip(df['PDF URL'], df['PDF Title'], df['Company']):   
+            for pdfURL, pdfTitle, company in zip(df['PDF URL'], df['PDF Title'], df['Company']):   
                 fileDirectory = inputPath.parent / Path(company)
                 #Create the local company directory if it does not exist
                 if not os.path.exists(fileDirectory):
@@ -158,11 +173,14 @@ def savePDFPages(inputPath):
                 pdfTitle = pdfTitle.replace("/","-").replace("\n", "")
                 filePath = fileDirectory / Path(f"{pdfTitle}.pdf")
                 
+                #Check if the file already exists 
                 if not os.path.exists(filePath):
                     #Download the pdf and save to the local file path
-                    with urllib.request.urlopen(pdfUrl) as response, open(filePath, 'wb') as out_file:
-                        data = response.read()
-                        out_file.write(data)
+                    success = downloadPDF(pdfURL, filePath)
+                    if success:
+                        logging.info(f"{pdfTitle} saved successfully")
+                    else:
+                        logging.warning(f"Failed to download {pdfTitle}")
                 localFilePaths.append(filePath)
             #Save FilePath to row
             df['Local FilePath'] = localFilePaths
@@ -170,10 +188,14 @@ def savePDFPages(inputPath):
     return None
 
 def main():
-    inputPath = Path('C:/Users/Computer/OneDrive - The Ohio State University/Documents/Mosby Project/pdf-harvesting-app/docs/Formatted TA URLs.xlsx')
-    generatePDFPage(inputPath)
-    # inputPath = Path('C:/Users/Computer/OneDrive - The Ohio State University/Documents/Mosby Project/pdf-harvesting-app/docs/ScrapedPDFs.xlsx')
-    # savePDFPages(inputPath)
+
+    #Configure logging 
+    configure_logging(Path("pdf-harvesting-app") / Path("LogFile.log"))
+
+    # inputPath = Path('C:/Users/Computer/OneDrive - The Ohio State University/Documents/Mosby Project/pdf-harvesting-app/docs/Formatted TA URLs.xlsx')
+    # generatePDFPage(inputPath)
+    inputPath = Path('C:/Users/Computer/OneDrive - The Ohio State University/Documents/Mosby Project/pdf-harvesting-app/docs/ScrapedPDFs.xlsx')
+    extractPDFPages(inputPath)
 
 if __name__ == "__main__":
     main()

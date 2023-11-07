@@ -3,6 +3,9 @@ venv/
 env/
 docs/
 
+#Log file
+LogFile.log
+
 # .venv (commonly used by poetry)
 .venv/
 
