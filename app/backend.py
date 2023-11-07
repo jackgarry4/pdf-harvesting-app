@@ -1,12 +1,24 @@
 from asyncio import as_completed
 from .scraper import scrape_pdf_links
 import pandas as pd
-import openpyxl
 import requests
 import logging
 import concurrent.futures
 import time
 import re
+import urllib.request
+import os
+from pathlib import Path
+import time
+
+
+#PROBLEMS 
+#1. Some of the urls are being read and the page is being said that it is not valid
+#2. Some of the PDFs are deprecated when they are being downloaded 
+
+#QUESTIONS FOR DYLAN
+#1. Do you want to add company name by the URLs on Formatted URL.xlsx page?
+#2. 
 
 
 def getTaURLs(xls):
@@ -55,7 +67,7 @@ def processURLs(taUrls, xls, session):
         df = pd.read_excel(xls, sheet_name = current_sheet)
 
         try:
-            with concurrent.futures.ThreadPoolExecutor() as executor:
+            with concurrent.futures.ThreadPoolExecutor(max_workers=10) as executor:
                 futureToURL = {executor.submit(scrape_pdf_links, url, session): url for url in sheetList}
 
             for future in concurrent.futures.as_completed(futureToURL):
@@ -109,9 +121,6 @@ def extractExcel(xlPath):
         return None
 
     
-def generateOutputXlPath(inputPath):
-    outputPath = re.match(r"^(.*?)/[^/]+$", inputPath).group(1)
-    return outputPath+"/ScrapedPDFs.xlsx"
 
 def saveCompanyPDFs(companies, outputPath):
     df = pd.DataFrame(columns=['Company', 'PDF Title', 'PDF URL', 'Assets', 'Number of Participants', 'Source'])
@@ -127,20 +136,44 @@ def saveCompanyPDFs(companies, outputPath):
 
 
 def generatePDFPage(inputPath):
-    inputPath = 'C:/Users/Computer/OneDrive - The Ohio State University/Documents/Mosby Project/pdf-harvesting-app/docs/Formatted TA URLs.xlsx'
     companies = extractExcel(inputPath)
-    outputPath = generateOutputXlPath(inputPath)
+    outputPath = inputPath.parent / Path("ScrapedPDFs.xlsx")
     saveCompanyPDFs(companies, outputPath)
+
+
 
 def savePDFPages(inputPath):
     #Save PDF pages on excel document to local directory
+    with pd.ExcelFile(inputPath) as xls:
+        for sheet in xls.sheet_names:
+            df = pd.read_excel(xls, sheet_name = sheet)
+            localFilePaths = []
+            for pdfUrl, pdfTitle, company in zip(df['PDF URL'], df['PDF Title'], df['Company']):   
+                fileDirectory = inputPath.parent / Path(company)
+                #Create the local company directory if it does not exist
+                if not os.path.exists(fileDirectory):
+                    os.makedirs(fileDirectory)
+                
+                #Replace instances of / as will mess up file path
+                pdfTitle = pdfTitle.replace("/","-").replace("\n", "")
+                filePath = fileDirectory / Path(f"{pdfTitle}.pdf")
+                
+                if not os.path.exists(filePath):
+                    #Download the pdf and save to the local file path
+                    with urllib.request.urlopen(pdfUrl) as response, open(filePath, 'wb') as out_file:
+                        data = response.read()
+                        out_file.write(data)
+                localFilePaths.append(filePath)
+            #Save FilePath to row
+            df['Local FilePath'] = localFilePaths
+            df.to_excel(xls, sheet_name = sheet, index=False)
     return None
 
 def main():
-    #inputPath = 'C:/Users/Computer/OneDrive - The Ohio State University/Documents/Mosby Project/pdf-harvesting-app/docs/Formatted TA URLs.xlsx'
-    #generatePDFPage(inputPath)
-    inputPath = 'C:\Users\Computer\OneDrive - The Ohio State University\Documents\Mosby Project\pdf-harvesting-app\docs\ScrapedPDFs.xlsx'
-    savePDFPages(inputPath)
+    inputPath = Path('C:/Users/Computer/OneDrive - The Ohio State University/Documents/Mosby Project/pdf-harvesting-app/docs/Formatted TA URLs.xlsx')
+    generatePDFPage(inputPath)
+    # inputPath = Path('C:/Users/Computer/OneDrive - The Ohio State University/Documents/Mosby Project/pdf-harvesting-app/docs/ScrapedPDFs.xlsx')
+    # savePDFPages(inputPath)
 
 if __name__ == "__main__":
     main()
