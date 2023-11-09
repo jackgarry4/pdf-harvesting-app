@@ -166,8 +166,9 @@ def extractPDFPages(inputPath):
         for sheet in xls.sheet_names:
             df = pd.read_excel(xls, sheet_name = sheet)
             localFilePaths = []
-            for pdfURL, pdfTitle, company in zip(df['PDF URL'], df['PDF Title'], df['Company']): 
-                print(f"{pdfURL}, {pdfTitle}, {company}")  
+
+            def downloadAndSave(pdfData):
+                pdfURL, pdfTitle, company = pdfData
                 fileDirectory = inputPath.parent / Path(company)
                 #Create the local company directory if it does not exist
                 if not os.path.exists(fileDirectory):
@@ -183,11 +184,13 @@ def extractPDFPages(inputPath):
                     logging.info(f"{pdfTitle} saved successfully")
                 else:
                     logging.warning(f"Failed to download {pdfTitle}")
-                
                 localFilePaths.append(filePath)
+            
+            with concurrent.futures.ThreadPoolExecutor(max_workers=10) as executor:
+                executor.map(downloadAndSave, zip(df['PDF URL'], df['PDF Title'], df['Company']))
             #Save FilePath to row
             df['Local FilePath'] = localFilePaths
-            df['Local FilePath'] = df['Local FilePath'].apply(lambda x: f'=HYPERLINK("{x}", "Link")')
+            df['Local FilePath'] = df['Local FilePath'].apply(lambda x: f'=HYPERLINK("{x}", "CLICK FOR FILE")')
             df.to_excel(xls, sheet_name = sheet, index=False)
     return None
 
