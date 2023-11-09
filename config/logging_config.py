@@ -9,7 +9,7 @@ def configure_logging(logPath):
     console_handler.setFormatter(console_formatter)
 
     # Configure logging to file
-    file_handler = logging.FileHandler(logPath)  # Specify the file path
+    file_handler = logging.FileHandler(logPath, mode="w+")  # Specify the file path
     file_handler.setLevel(logging.INFO)  # Set the desired logging level for the file
     file_formatter = logging.Formatter('%(asctime)s - %(levelname)s - %(message)s')
     file_handler.setFormatter(file_formatter)

@@ -16,7 +16,6 @@ import time
 
 #PROBLEMS 
 #1. Some of the urls are being read and the page is being said that it is not valid
-#2. Some of the PDFs are deprecated when they are being downloaded 
 
 #QUESTIONS FOR DYLAN
 #1. Do you want to add company name by the URLs on Formatted URL.xlsx page?
@@ -45,6 +44,7 @@ def getTaURLs(xls):
 
 
 def processURLs(taUrls, xls, session):
+# def processURLs(taUrls, xls):
     """
     Process TransAmerica URLs concurrently, scrape PDF links, and update an Excel file.
 
@@ -71,13 +71,14 @@ def processURLs(taUrls, xls, session):
         try:
             with concurrent.futures.ThreadPoolExecutor(max_workers=10) as executor:
                 futureToURL = {executor.submit(scrape_pdf_links, url, session): url for url in sheetList}
+                # futureToURL = {executor.submit(scrape_pdf_links, url): url for url in sheetList}
 
             for future in concurrent.futures.as_completed(futureToURL):
                 url = futureToURL[future]
                 url_index = df.index[df['URL'] == url][0]
                 companyTuple = future.result()
 
-
+                
                 if companyTuple[0] is not None:
                     #Find company by url in xlsPath and write status to excel file
                     df.at[url_index, 'Active'] = "True"
@@ -85,7 +86,7 @@ def processURLs(taUrls, xls, session):
                 else:
                     df.at[url_index, 'Active'] = str(companyTuple[1])
         except Exception as e:
-            logging.error(f"Error scraping")
+            logging.error(f"Error scraping: {e}")
             continue
         try:
             df.to_excel(xls, sheet_name = current_sheet, index=False)
@@ -114,9 +115,11 @@ def extractExcel(xlPath):
     List[Company] or None: A list of Company objects if extraction is successful, or None in case of an error.
     """
     try:
-        with requests.Session() as session, pd.ExcelFile(xlPath) as xls: 
+        # with pd.ExcelFile(xlPath) as xls: 
+        with  requests.Session() as session, pd.ExcelFile(xlPath) as xls: 
             taUrls = getTaURLs(xls)
             companies = processURLs(taUrls, xls, session)
+            # companies = processURLs(taUrls, xls)
         return companies
     except Exception as e:
         logging.exception(f"Error extracting data from Excel file {xlPath}: {e}")
