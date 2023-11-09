@@ -166,7 +166,8 @@ def extractPDFPages(inputPath):
         for sheet in xls.sheet_names:
             df = pd.read_excel(xls, sheet_name = sheet)
             localFilePaths = []
-            for pdfURL, pdfTitle, company in zip(df['PDF URL'], df['PDF Title'], df['Company']):   
+            for pdfURL, pdfTitle, company in zip(df['PDF URL'], df['PDF Title'], df['Company']): 
+                print(f"{pdfURL}, {pdfTitle}, {company}")  
                 fileDirectory = inputPath.parent / Path(company)
                 #Create the local company directory if it does not exist
                 if not os.path.exists(fileDirectory):
@@ -176,17 +177,17 @@ def extractPDFPages(inputPath):
                 pdfTitle = pdfTitle.replace("/","-").replace("\n", "")
                 filePath = fileDirectory / Path(f"{pdfTitle}.pdf")
                 
-                #Check if the file already exists 
-                if not os.path.exists(filePath):
-                    #Download the pdf and save to the local file path
-                    success = downloadPDF(pdfURL, filePath)
-                    if success:
-                        logging.info(f"{pdfTitle} saved successfully")
-                    else:
-                        logging.warning(f"Failed to download {pdfTitle}")
+                #Download the pdf and save to the local file path
+                success = downloadPDF(pdfURL, filePath)
+                if success:
+                    logging.info(f"{pdfTitle} saved successfully")
+                else:
+                    logging.warning(f"Failed to download {pdfTitle}")
+                
                 localFilePaths.append(filePath)
             #Save FilePath to row
             df['Local FilePath'] = localFilePaths
+            df['Local FilePath'] = df['Local FilePath'].apply(lambda x: f'=HYPERLINK("{x}", "Link")')
             df.to_excel(xls, sheet_name = sheet, index=False)
     return None
 
@@ -194,11 +195,14 @@ def main():
 
     #Configure logging 
     configure_logging(Path("pdf-harvesting-app") / Path("LogFile.log"))
-
+    
+    start = time.time()
     # inputPath = Path('C:/Users/Computer/OneDrive - The Ohio State University/Documents/Mosby Project/pdf-harvesting-app/docs/Formatted TA URLs.xlsx')
     # generatePDFPage(inputPath)
     inputPath = Path('C:/Users/Computer/OneDrive - The Ohio State University/Documents/Mosby Project/pdf-harvesting-app/docs/ScrapedPDFs.xlsx')
     extractPDFPages(inputPath)
+    end = time.time()
+    print(f"Time: {end-start}")
 
 if __name__ == "__main__":
     main()
