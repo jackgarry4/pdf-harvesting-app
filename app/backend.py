@@ -12,10 +12,15 @@ import urllib.request
 import os
 from pathlib import Path
 import time
+import threading
 
 
 #PROBLEMS 
 #1. Some of the urls are being read and the page is being said that it is not valid
+#2. local File Paths producing different length than the index of Local File Path
+#3. Wri
+# ting to file path with sheet_name "PDFs" is giving error
+#RUN EVERYTHING AND MAKE SURE EVERYTHING IS FUNCTIONING RIGHT
 
 #QUESTIONS FOR DYLAN
 #1. Do you want to add company name by the URLs on Formatted URL.xlsx page?
@@ -44,7 +49,6 @@ def getTaURLs(xls):
 
 
 def processURLs(taUrls, xls, session):
-# def processURLs(taUrls, xls):
     """
     Process TransAmerica URLs concurrently, scrape PDF links, and update an Excel file.
 
@@ -71,7 +75,6 @@ def processURLs(taUrls, xls, session):
         try:
             with concurrent.futures.ThreadPoolExecutor(max_workers=10) as executor:
                 futureToURL = {executor.submit(scrape_pdf_links, url, session): url for url in sheetList}
-                # futureToURL = {executor.submit(scrape_pdf_links, url): url for url in sheetList}
 
             for future in concurrent.futures.as_completed(futureToURL):
                 url = futureToURL[future]
@@ -99,7 +102,7 @@ def processURLs(taUrls, xls, session):
     return companies
 
 
-def extractExcel(xlPath):
+def extractTAExcel(xlPath):
     """
     Extract data from a TransAmerica Excel file.
 
@@ -115,11 +118,9 @@ def extractExcel(xlPath):
     List[Company] or None: A list of Company objects if extraction is successful, or None in case of an error.
     """
     try:
-        # with pd.ExcelFile(xlPath) as xls: 
         with  requests.Session() as session, pd.ExcelFile(xlPath) as xls: 
             taUrls = getTaURLs(xls)
             companies = processURLs(taUrls, xls, session)
-            # companies = processURLs(taUrls, xls)
         return companies
     except Exception as e:
         logging.exception(f"Error extracting data from Excel file {xlPath}: {e}")
@@ -127,23 +128,32 @@ def extractExcel(xlPath):
 
     
 
-def saveCompanyPDFs(companies, outputPath):
-    df = pd.DataFrame(columns=['Company', 'PDF Title', 'PDF URL', 'Assets', 'Number of Participants', 'Source'])
+def saveCompanyandPDFs(companies, outputPath):
+    dfPDF = pd.DataFrame(columns=['Company', 'PDF Title', 'PDF URL', 'Source'])
+    dfCompany = pd.DataFrame(columns = ['Company', 'Assets', 'Plan Participants'])
     for company in companies:
+        dataCompany = {'Company' : company.name, 'Assets' : 0, 'Plan Participants' : 0}
+        dfCompanyVal = pd.DataFrame(data = [dataCompany], columns=['Company', 'Assets', 'Plan Participants'])
+        dfCompany = pd.concat([dfCompany, dfCompanyVal], ignore_index=True)
+        dfCompany.reset_index(drop=True, inplace = True)
         for pdf in company.pdfs:
-            d = {'Company' : company.name, 'PDF Title': pdf.title, 'PDF URL': pdf.url, 'Assets' : 0, 'Number of Participants': 0, 'Source' : pdf.source}
-            dfVal = pd.DataFrame(data = [d], columns=['Company', 'PDF Title', 'PDF URL', 'Assets', 'Number of Participants', 'Source'])
-            df= pd.concat([df, dfVal], ignore_index=True)
-            df.reset_index(drop=True, inplace = True)
-    
-    df.to_excel(outputPath)
+            dataPDF = {'Company' : company.name, 'PDF Title': pdf.title, 'PDF URL': pdf.url, 'Source' : pdf.source}
+            dfPDFVal = pd.DataFrame(data = [dataPDF], columns=['Company', 'PDF Title', 'PDF URL', 'Source'])
+            dfPDF= pd.concat([dfPDF, dfPDFVal], ignore_index=True)
+            dfPDF.reset_index(drop=True, inplace = True)
+    with pd.ExcelWriter(outputPath) as writer:
+        dfPDF.to_excel(writer, sheet_name= 'PDFs')
+        dfCompany.to_excel(writer, sheet_name='Companies')
     return None
 
 
-def generatePDFPage(inputPath):
-    companies = extractExcel(inputPath)
+
+def generateXLSheet(inputPath):
+    companies = extractTAExcel(inputPath)
     outputPath = inputPath.parent / Path("ScrapedPDFs.xlsx")
-    saveCompanyPDFs(companies, outputPath)
+    saveCompanyandPDFs(companies, outputPath)
+
+
 
 
 def downloadPDF(pdfURL,filePath, maxRetries = 3, retryDelay = 1):
@@ -162,36 +172,43 @@ def downloadPDF(pdfURL,filePath, maxRetries = 3, retryDelay = 1):
 
 def extractPDFPages(inputPath):
     #Save PDF pages on excel document to local directory
-    with pd.ExcelFile(inputPath) as xls:
-        for sheet in xls.sheet_names:
-            df = pd.read_excel(xls, sheet_name = sheet)
-            localFilePaths = []
+    df = pd.read_excel(inputPath, sheet_name = 'PDFs')
 
-            def downloadAndSave(pdfData):
-                pdfURL, pdfTitle, company = pdfData
-                fileDirectory = inputPath.parent / Path(company)
-                #Create the local company directory if it does not exist
-                if not os.path.exists(fileDirectory):
-                    os.makedirs(fileDirectory)
-                
-                #Replace instances of / as will mess up file path
-                pdfTitle = pdfTitle.replace("/","-").replace("\n", "")
-                filePath = fileDirectory / Path(f"{pdfTitle}.pdf")
-                
-                #Download the pdf and save to the local file path
-                success = downloadPDF(pdfURL, filePath)
-                if success:
-                    logging.info(f"{pdfTitle} saved successfully")
-                else:
-                    logging.warning(f"Failed to download {pdfTitle}")
-                localFilePaths.append(filePath)
-            
-            with concurrent.futures.ThreadPoolExecutor(max_workers=10) as executor:
-                executor.map(downloadAndSave, zip(df['PDF URL'], df['PDF Title'], df['Company']))
-            #Save FilePath to row
-            df['Local FilePath'] = localFilePaths
-            df['Local FilePath'] = df['Local FilePath'].apply(lambda x: f'=HYPERLINK("{x}", "CLICK FOR FILE")')
-            df.to_excel(xls, sheet_name = sheet, index=False)
+    localFilePaths = []
+    lock = threading.Lock()
+
+    def downloadAndSave(pdfData):
+        pdfURL, pdfTitle, company = pdfData
+        fileDirectory = inputPath.parent / Path(company)
+        #Create the local company directory if it does not exist
+        if not os.path.exists(fileDirectory):
+            os.makedirs(fileDirectory)
+        
+        #Replace instances of / as will mess up file path
+        pdfTitle = pdfTitle.replace("/","-").replace("\n", "")
+        filePath = fileDirectory / Path(f"{pdfTitle}.pdf")
+
+        with lock:
+            localFilePaths.append(filePath)
+
+        #Download the pdf and save to the local file path
+        success = downloadPDF(pdfURL, filePath)
+        if success:
+            logging.info(f"{pdfTitle} saved successfully")
+        else:
+            logging.warning(f"Failed to download {pdfTitle}")
+
+        
+    
+
+    with concurrent.futures.ThreadPoolExecutor(max_workers=10) as executor:
+        executor.map(downloadAndSave, zip(df['PDF URL'], df['PDF Title'], df['Company']))
+
+    with pd.ExcelWriter(inputPath, if_sheet_exists='replace', mode='a') as writer:
+        #Save FilePath to row
+        df['Local FilePath'] = localFilePaths
+        df['Local FilePath'] = df['Local FilePath'].apply(lambda x: f'=HYPERLINK("{x}", "CLICK FOR FILE")')
+        df.to_excel(writer, sheet_name = "PDFs",  index=False)
     return None
 
 def main():
@@ -200,10 +217,11 @@ def main():
     configure_logging(Path("pdf-harvesting-app") / Path("LogFile.log"))
     
     start = time.time()
-    # inputPath = Path('C:/Users/Computer/OneDrive - The Ohio State University/Documents/Mosby Project/pdf-harvesting-app/docs/Formatted TA URLs.xlsx')
-    # generatePDFPage(inputPath)
-    inputPath = Path('C:/Users/Computer/OneDrive - The Ohio State University/Documents/Mosby Project/pdf-harvesting-app/docs/ScrapedPDFs.xlsx')
-    extractPDFPages(inputPath)
+    inputPath = Path('C:/Users/Computer/OneDrive - The Ohio State University/Documents/Mosby Project/pdf-harvesting-app/docs/Formatted TA URLs.xlsx')
+    generateXLSheet(inputPath)
+
+    # inputPath = Path('C:/Users/Computer/OneDrive - The Ohio State University/Documents/Mosby Project/pdf-harvesting-app/docs/ScrapedPDFs.xlsx')
+    # extractPDFPages(inputPath)
     end = time.time()
     print(f"Time: {end-start}")
 

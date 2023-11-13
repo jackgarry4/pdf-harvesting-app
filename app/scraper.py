@@ -10,7 +10,6 @@ import logging
 
 
 def fetchDataFromURL(url, session):
-# def fetchDataFromURL(url):
 
     """
     Make an HTTP request to the provided URL and return the HTML response as a string.
@@ -23,7 +22,6 @@ def fetchDataFromURL(url, session):
             and 'error' containing the error message (if an error occurs).
     """
     try:
-        # pageData = requests.Session().get(url)
         pageData = session.get(url)
         pageData.raise_for_status()
         return {'data': pageData.text, 'error': None}
@@ -108,14 +106,12 @@ def extractPDFs(company, doc):
         pdfUrlJS = a['href']
         pdfUrl = extractUrlFromExpression(pdfUrlJS)
         pdfTitle = a.find('li').text
-        pdf = PDF(pdfUrl, pdfTitle)
-        company.add_pdf(pdf)
+        company.add_pdf(pdfUrl, pdfTitle)
     return company
 
 
 
 def scrape_pdf_links(homePageUrl, session):
-# def scrape_pdf_links(homePageUrl):
     """
     Scrape PDF links from a TransAmerica (TA) page.
 
@@ -132,7 +128,6 @@ def scrape_pdf_links(homePageUrl, session):
     """
     logging.info(f"Scraping {homePageUrl}")
     pageHTML = fetchDataFromURL(homePageUrl, session)
-    # pageHTML = fetchDataFromURL(homePageUrl)
     if pageHTML["error"] is None:
         doc = BeautifulSoup(pageHTML["data"], 'html.parser')
         docTitle = doc.head.title.string
