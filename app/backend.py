@@ -16,13 +16,10 @@ import threading
 import win32com.client
 
 
-#PROBLEMS 
-#1. Add Hotlinks to each companies folder path
-#2. Add comments for methods
+#TODOs 
+# Add front end
+# Add Asset and Plan Participants scraping 
 
-#QUESTIONS FOR DYLAN
-#1. Do you want to add company name by the URLs on Formatted URL.xlsx page?
-#2. 
 
 
 def getTaURLs(xls):
@@ -127,6 +124,17 @@ def extractTAExcel(xlPath):
     
 
 def saveCompanyandPDFs(companies, outputPath):
+    """
+    Save company and PDF data to an Excel file.
+
+    Parameters:
+    - companies (list): List of Company objects.
+    - outputPath (str): Path to the output Excel file.
+
+    Returns:
+    - None: The function saves the data to the specified Excel file.
+    """
+    
     dfPDFData = []
     dfCompanyData = []
 
@@ -138,7 +146,8 @@ def saveCompanyandPDFs(companies, outputPath):
                 'PDF Title': pdf.title, 
                 'PDF URL': pdf.url, 
                 'Source' : pdf.source})
-    # Create DataFrames
+            
+    #Create DataFrames
     dfPDF = pd.DataFrame(dfPDFData, columns=['Company', 'PDF Title', 'PDF URL', 'Source'])
     dfCompany = pd.DataFrame(dfCompanyData, columns=['Company', 'Assets', 'Plan Participants'])
 
@@ -151,6 +160,15 @@ def saveCompanyandPDFs(companies, outputPath):
 
 
 def generateXLSheet(inputPath):
+    """
+    Generate an Excel sheet with company and PDF data.
+
+    Parameters:
+    - inputPath (Path): Path to the input Excel file containing company data.
+
+    Returns:
+    - None: The function creates an Excel sheet with company and PDF data.
+    """
     companies = extractTAExcel(inputPath)
     outputPath = inputPath.parent / Path("ScrapedPDFs.xlsx")
     saveCompanyandPDFs(companies, outputPath)
@@ -159,6 +177,18 @@ def generateXLSheet(inputPath):
 
 
 def downloadPDF(pdfURL,filePath, maxRetries = 3, retryDelay = 1):
+    """
+    Download a PDF from the given URL and save it to the specified file path.
+
+    Parameters:
+    - pdfURL (str): The URL of the PDF to download.
+    - filePath (str): The local file path to save the downloaded PDF.
+    - maxRetries (int, optional): Maximum number of download retries in case of failure. Default is 3.
+    - retryDelay (int, optional): Delay (in seconds) between download retries. Default is 1.
+
+    Returns:
+    - bool: True if the PDF is successfully downloaded, False otherwise.
+    """
     retries = 0
     while retries < maxRetries:
         try:
@@ -173,7 +203,15 @@ def downloadPDF(pdfURL,filePath, maxRetries = 3, retryDelay = 1):
     return False
 
 def addCompanyLinks(inputPath):
-    #Save PDF pages on excel document to local directory
+    """
+    Add hyperlinks to local directories for each company in the Companies sheet of an Excel file.
+
+    Parameters:
+    - inputPath (Path): Path to the input Excel file.
+
+    Returns:
+    - None: The function adds hyperlinks to the Companies sheet and saves the modified Excel file.
+    """
     with pd.ExcelFile(inputPath, engine='openpyxl') as xls:
         dfCompany = pd.read_excel(xls, sheet_name='Companies')
 
@@ -196,22 +234,33 @@ def addCompanyLinks(inputPath):
 
 
 def refreshExcel(inputPath):
-    # Opening Excel software using the win32com 
+    """
+    Refresh all data connections and calculations in an Excel workbook.
+
+    Parameters:
+    - inputPath (Path): Path to the Excel file to be refreshed.
+
+    Returns:
+    - None: The function refreshes the workbook and saves the changes.
+    """
     File = win32com.client.Dispatch("Excel.Application")    
-
     File.Visible = 1
-
     Workbook = File.Workbooks.open(str(inputPath))
-
     Workbook.RefreshAll()
-
     Workbook.Save()
-
     File.Quit()
 
 
 def extractPDFPages(inputPath):
-    
+    """
+    Extract PDF data from an Excel file, download PDFs, and update the Excel file.
+
+    Parameters:
+    - inputPath (Path): Path to the input Excel file containing PDF data.
+
+    Returns:
+    - None: The function downloads PDFs, updates the Excel file, and adds hyperlinks.
+    """    
     refreshExcel(inputPath)
 
     #Save PDF pages on excel document to local directory
@@ -231,20 +280,19 @@ def extractPDFPages(inputPath):
             if not os.path.exists(fileDirectory):
                 os.makedirs(fileDirectory)
             
-        
-
             #Replace instances of / as will mess up file path
             pdfTitle = pdfTitle.replace("/","-").replace("\n", "")
             filePath = fileDirectory / Path(f"{pdfTitle}.pdf")
-
             
-
-            #Download the pdf and save to the local file path
-            success = downloadPDF(pdfURL, filePath)
-            if success:
-                logging.info(f"{pdfTitle} saved successfully")
-            else:
-                logging.warning(f"Failed to download {pdfTitle}")
+            try:
+                #Download the pdf and save to the local file path
+                success = downloadPDF(pdfURL, filePath)
+                if success:
+                    logging.info(f"{pdfTitle} saved successfully")
+                else:
+                    logging.warning(f"Failed to download {pdfTitle}")
+            except Exception as e:
+                logging.error(f"Error downloading {pdfTitle}: {e}")
         with lock:
                 localFilePaths.append(filePath)
 
