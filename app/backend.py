@@ -13,14 +13,14 @@ import os
 from pathlib import Path
 import time
 import threading
+import win32com.client
 
 
 #PROBLEMS 
-#1. Some of the urls are being read and the page is being said that it is not valid
-#2. local File Paths producing different length than the index of Local File Path
-#3. Wri
-# ting to file path with sheet_name "PDFs" is giving error
-#RUN EVERYTHING AND MAKE SURE EVERYTHING IS FUNCTIONING RIGHT
+#1. Add Hotlinks to each companies folder path
+#2. Filter out pdfs with "null" values
+#3. Add comments for methods
+#4. Cannot access company function value unless you save the excel before running it
 
 #QUESTIONS FOR DYLAN
 #1. Do you want to add company name by the URLs on Formatted URL.xlsx page?
@@ -73,7 +73,7 @@ def processURLs(taUrls, xls, session):
         df = pd.read_excel(xls, sheet_name = current_sheet)
 
         try:
-            with concurrent.futures.ThreadPoolExecutor(max_workers=10) as executor:
+            with concurrent.futures.ThreadPoolExecutor(max_workers=5) as executor:
                 futureToURL = {executor.submit(scrape_pdf_links, url, session): url for url in sheetList}
 
             for future in concurrent.futures.as_completed(futureToURL):
@@ -129,21 +129,25 @@ def extractTAExcel(xlPath):
     
 
 def saveCompanyandPDFs(companies, outputPath):
-    dfPDF = pd.DataFrame(columns=['Company', 'PDF Title', 'PDF URL', 'Source'])
-    dfCompany = pd.DataFrame(columns = ['Company', 'Assets', 'Plan Participants'])
+    dfPDFData = []
+    dfCompanyData = []
+
     for company in companies:
-        dataCompany = {'Company' : company.name, 'Assets' : 0, 'Plan Participants' : 0}
-        dfCompanyVal = pd.DataFrame(data = [dataCompany], columns=['Company', 'Assets', 'Plan Participants'])
-        dfCompany = pd.concat([dfCompany, dfCompanyVal], ignore_index=True)
-        dfCompany.reset_index(drop=True, inplace = True)
+        dfCompanyData.append({'Company' : company.name, 'Assets' : 0, 'Plan Participants' : 0})
         for pdf in company.pdfs:
-            dataPDF = {'Company' : company.name, 'PDF Title': pdf.title, 'PDF URL': pdf.url, 'Source' : pdf.source}
-            dfPDFVal = pd.DataFrame(data = [dataPDF], columns=['Company', 'PDF Title', 'PDF URL', 'Source'])
-            dfPDF= pd.concat([dfPDF, dfPDFVal], ignore_index=True)
-            dfPDF.reset_index(drop=True, inplace = True)
-    with pd.ExcelWriter(outputPath) as writer:
-        dfPDF.to_excel(writer, sheet_name= 'PDFs')
-        dfCompany.to_excel(writer, sheet_name='Companies')
+            dfPDFData.append({
+                'Company' : f"=IFERROR(VLOOKUP(\"{company.name}\",Companies!A:A, 1, FALSE), \"null\")", 
+                'PDF Title': pdf.title, 
+                'PDF URL': pdf.url, 
+                'Source' : pdf.source})
+    # Create DataFrames
+    dfPDF = pd.DataFrame(dfPDFData, columns=['Company', 'PDF Title', 'PDF URL', 'Source'])
+    dfCompany = pd.DataFrame(dfCompanyData, columns=['Company', 'Assets', 'Plan Participants'])
+
+    #Write DataFrames to Excel file
+    with pd.ExcelWriter(outputPath, engine='openpyxl') as writer:
+        dfPDF.to_excel(writer, sheet_name= 'PDFs', index=False)
+        dfCompany.to_excel(writer, sheet_name='Companies', index = False)
     return None
 
 
@@ -170,45 +174,69 @@ def downloadPDF(pdfURL,filePath, maxRetries = 3, retryDelay = 1):
             time.sleep(retryDelay)
     return False
 
+
+def refreshExcel(inputPath):
+    # Opening Excel software using the win32com 
+    File = win32com.client.Dispatch("Excel.Application")    
+
+    File.Visible = 1
+
+    Workbook = File.Workbooks.open(str(inputPath))
+
+    Workbook.RefreshAll()
+
+    Workbook.Save()
+
+    File.Quit()
+
+
 def extractPDFPages(inputPath):
+    
+    refreshExcel(inputPath)
+
     #Save PDF pages on excel document to local directory
-    df = pd.read_excel(inputPath, sheet_name = 'PDFs')
+    with pd.ExcelFile(inputPath, engine='openpyxl') as xls:
+        df = pd.read_excel(xls, sheet_name = 'PDFs')
 
     localFilePaths = []
     lock = threading.Lock()
 
     def downloadAndSave(pdfData):
         pdfURL, pdfTitle, company = pdfData
-        fileDirectory = inputPath.parent / Path(company)
-        #Create the local company directory if it does not exist
-        if not os.path.exists(fileDirectory):
-            os.makedirs(fileDirectory)
-        
-        #Replace instances of / as will mess up file path
-        pdfTitle = pdfTitle.replace("/","-").replace("\n", "")
-        filePath = fileDirectory / Path(f"{pdfTitle}.pdf")
+        filePath = "null"
 
+        if pd.notna(company):    
+            fileDirectory = inputPath.parent / Path(company)
+            #Create the local company directory if it does not exist
+            if not os.path.exists(fileDirectory):
+                os.makedirs(fileDirectory)
+        
+
+            #Replace instances of / as will mess up file path
+            pdfTitle = pdfTitle.replace("/","-").replace("\n", "")
+            filePath = fileDirectory / Path(f"{pdfTitle}.pdf")
+
+            
+
+            #Download the pdf and save to the local file path
+            success = downloadPDF(pdfURL, filePath)
+            if success:
+                logging.info(f"{pdfTitle} saved successfully")
+            else:
+                logging.warning(f"Failed to download {pdfTitle}")
         with lock:
-            localFilePaths.append(filePath)
+                localFilePaths.append(filePath)
 
-        #Download the pdf and save to the local file path
-        success = downloadPDF(pdfURL, filePath)
-        if success:
-            logging.info(f"{pdfTitle} saved successfully")
-        else:
-            logging.warning(f"Failed to download {pdfTitle}")
-
-        
     
-
-    with concurrent.futures.ThreadPoolExecutor(max_workers=10) as executor:
+    with concurrent.futures.ThreadPoolExecutor(max_workers=5) as executor:
         executor.map(downloadAndSave, zip(df['PDF URL'], df['PDF Title'], df['Company']))
 
     with pd.ExcelWriter(inputPath, if_sheet_exists='replace', mode='a') as writer:
         #Save FilePath to row
         df['Local FilePath'] = localFilePaths
         df['Local FilePath'] = df['Local FilePath'].apply(lambda x: f'=HYPERLINK("{x}", "CLICK FOR FILE")')
-        df.to_excel(writer, sheet_name = "PDFs",  index=False)
+        df['Company'] = df['Company'].apply(lambda x: f"=IFERROR(VLOOKUP(\"{x}\",Companies!A:A, 1, FALSE), \"null\")")
+        df.to_excel(writer, sheet_name = "PDFs", index = False)
     return None
 
 def main():
@@ -217,11 +245,12 @@ def main():
     configure_logging(Path("pdf-harvesting-app") / Path("LogFile.log"))
     
     start = time.time()
-    inputPath = Path('C:/Users/Computer/OneDrive - The Ohio State University/Documents/Mosby Project/pdf-harvesting-app/docs/Formatted TA URLs.xlsx')
-    generateXLSheet(inputPath)
+    # inputPath = Path('C:/Users/Computer/OneDrive - The Ohio State University/Documents/Mosby Project/pdf-harvesting-app/docs/Formatted TA URLs.xlsx')
+    # generateXLSheet(inputPath)
 
-    # inputPath = Path('C:/Users/Computer/OneDrive - The Ohio State University/Documents/Mosby Project/pdf-harvesting-app/docs/ScrapedPDFs.xlsx')
-    # extractPDFPages(inputPath)
+
+    inputPath = Path('C:/Users/Computer/OneDrive - The Ohio State University/Documents/Mosby Project/pdf-harvesting-app/docs/ScrapedPDFs.xlsx')
+    extractPDFPages(inputPath)
     end = time.time()
     print(f"Time: {end-start}")
 

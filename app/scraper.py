@@ -9,34 +9,38 @@ import logging
 
 
 
-def fetchDataFromURL(url, session):
+def fetchDataFromURL(url, session, max_retries = 3):
 
     """
     Make an HTTP request to the provided URL and return the HTML response as a string.
 
     Parameters:
     - url (str): The URL to make the HTTP request.
+    - session (requests.Session): The requests session to use for the request.
+    - max_retries (int): Maximum number of retries in case of failure.
 
     Returns:
     - dict: A dictionary with 'data' containing the HTML response text (if successful),
             and 'error' containing the error message (if an error occurs).
     """
-    try:
-        pageData = session.get(url)
-        pageData.raise_for_status()
-        return {'data': pageData.text, 'error': None}
-    except requests.exceptions.HTTPError as errh:
-        logging.warning(f'HTTP Error: {errh}')
-        return {'data': None, 'error': f'HTTP Error: {errh}'}
-    except requests.exceptions.ConnectionError as errc:
-        logging.warning(f'Error Connecting: {errc}')
-        return {'data': None, 'error': f'Error connecting: {errc}'}
-    except requests.exceptions.Timeout as errt:
-        logging.warning(f'Timeout Error: {errt}')
-        return {'data': None, 'error': f'Timeout Error: {errt}'}
-    except requests.exceptions.RequestException as e: 
-        logging.warning(f'Oops: Something else {e}')
-        return {'data': None, 'error': f'Oops error: {e}'}
+    for attempt in range(max_retries):
+        try:
+            pageData = session.get(url)
+            pageData.raise_for_status()
+            return {'data': pageData.text, 'error': None}
+        except requests.exceptions.HTTPError as errh:
+            logging.warning(f'HTTP Error: {errh}')
+            return {'data': None, 'error': f'HTTP Error: {errh}'}
+        except requests.exceptions.ConnectionError as errc:
+            logging.warning(f'Error Connecting: {errc}')
+            return {'data': None, 'error': f'Error connecting: {errc}'}
+        except requests.exceptions.Timeout as errt:
+            logging.warning(f'Timeout Error: {errt}')
+            return {'data': None, 'error': f'Timeout Error: {errt}'}
+        except requests.exceptions.RequestException as e: 
+            logging.warning(f'Oops: Something else {e}')
+            return {'data': None, 'error': f'Oops error: {e}'}
+    return {'data': None, 'error': f'Max retries reached.  Failed to fetch data from {url}'}
     
 
 #Extract the company name from the html and return
@@ -137,6 +141,8 @@ def scrape_pdf_links(homePageUrl, session):
             logging.info(f"Scraped {homePageUrl}")
             company = extractPDFs(company, doc)
             if len(company.pdfs) == 0:
+                logging.info(f"{companyName}")
+                logging.info(f"{doc.prettify()}")
                 return None, "This page does not contain any Plan Documents"
             else: 
                 return company, None
