@@ -18,9 +18,7 @@ import win32com.client
 
 #PROBLEMS 
 #1. Add Hotlinks to each companies folder path
-#2. Filter out pdfs with "null" values
-#3. Add comments for methods
-#4. Cannot access company function value unless you save the excel before running it
+#2. Add comments for methods
 
 #QUESTIONS FOR DYLAN
 #1. Do you want to add company name by the URLs on Formatted URL.xlsx page?
@@ -174,6 +172,28 @@ def downloadPDF(pdfURL,filePath, maxRetries = 3, retryDelay = 1):
             time.sleep(retryDelay)
     return False
 
+def addCompanyLinks(inputPath):
+    #Save PDF pages on excel document to local directory
+    with pd.ExcelFile(inputPath, engine='openpyxl') as xls:
+        dfCompany = pd.read_excel(xls, sheet_name='Companies')
+
+    companyHotlinks= []
+    lock = threading.Lock()
+
+    def downloadAndSave(company):
+        fileDirectory = inputPath.parent / Path(company)
+        with lock:
+            companyHotlinks.append(fileDirectory)
+
+    with concurrent.futures.ThreadPoolExecutor(max_workers=5) as executor:
+        executor.map(downloadAndSave, dfCompany['Company'])
+
+    with pd.ExcelWriter(inputPath, if_sheet_exists='replace', mode='a') as writer:
+        #Save FilePath to row
+        dfCompany['Hotlink'] = companyHotlinks
+        dfCompany['Hotlink'] = dfCompany['Hotlink'].apply(lambda x: f'=HYPERLINK("{x}", "CLICK FOR FILE")')
+        dfCompany.to_excel(writer, sheet_name = "Companies", index = False)
+
 
 def refreshExcel(inputPath):
     # Opening Excel software using the win32com 
@@ -196,7 +216,7 @@ def extractPDFPages(inputPath):
 
     #Save PDF pages on excel document to local directory
     with pd.ExcelFile(inputPath, engine='openpyxl') as xls:
-        df = pd.read_excel(xls, sheet_name = 'PDFs')
+        dfPDF = pd.read_excel(xls, sheet_name = 'PDFs')
 
     localFilePaths = []
     lock = threading.Lock()
@@ -210,6 +230,7 @@ def extractPDFPages(inputPath):
             #Create the local company directory if it does not exist
             if not os.path.exists(fileDirectory):
                 os.makedirs(fileDirectory)
+            
         
 
             #Replace instances of / as will mess up file path
@@ -229,14 +250,16 @@ def extractPDFPages(inputPath):
 
     
     with concurrent.futures.ThreadPoolExecutor(max_workers=5) as executor:
-        executor.map(downloadAndSave, zip(df['PDF URL'], df['PDF Title'], df['Company']))
+        executor.map(downloadAndSave, zip(dfPDF['PDF URL'], dfPDF['PDF Title'], dfPDF['Company']))
 
     with pd.ExcelWriter(inputPath, if_sheet_exists='replace', mode='a') as writer:
         #Save FilePath to row
-        df['Local FilePath'] = localFilePaths
-        df['Local FilePath'] = df['Local FilePath'].apply(lambda x: f'=HYPERLINK("{x}", "CLICK FOR FILE")')
-        df['Company'] = df['Company'].apply(lambda x: f"=IFERROR(VLOOKUP(\"{x}\",Companies!A:A, 1, FALSE), \"null\")")
-        df.to_excel(writer, sheet_name = "PDFs", index = False)
+        dfPDF['Local FilePath'] = localFilePaths
+        dfPDF['Local FilePath'] = dfPDF['Local FilePath'].apply(lambda x: f'=HYPERLINK("{x}", "CLICK FOR FILE")')
+        dfPDF['Company'] = dfPDF['Company'].apply(lambda x: f"=IFERROR(VLOOKUP(\"{x}\",Companies!A:A, 1, FALSE), \"null\")")
+        dfPDF.to_excel(writer, sheet_name = "PDFs", index = False)
+
+    addCompanyLinks(inputPath)
     return None
 
 def main():
