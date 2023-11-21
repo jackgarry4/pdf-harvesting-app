@@ -114,6 +114,29 @@ def extractPDFs(company, doc):
     return company
 
 
+def findValidDoc(homePageUrl, session):
+    pageHTML = fetchDataFromURL(homePageUrl, session)
+    if pageHTML['error'] is None:
+        doc = BeautifulSoup(pageHTML["data"], 'html.parser')
+        #Check to see if the account number exists and if not run fetchData again until it does
+        accountNumberTable = doc.find('table', {'style': 'background-color:#F8F8F8;border-width: thin;border-collapse:collapse;border-color:#DCDCDC'})
+        # Find the cell with the label "Account #:"
+        accountLabelCell = accountNumberTable.find('td', text='Account #:')
+        if accountLabelCell and accountLabelCell.find_next('td'):
+            accountValue = accountLabelCell.find_next('td').text.strip()
+            if accountValue:
+                logging.info("Valid doc found")
+                return doc
+            else:
+                logging.info("Invalid doc found")
+                return findValidDoc(homePageUrl, session)
+        else: 
+            logging.info("Invalid doc found")
+            return findValidDoc(homePageUrl, session) 
+    else:
+        return None
+
+
 
 def scrape_pdf_links(homePageUrl, session):
     """
@@ -131,25 +154,22 @@ def scrape_pdf_links(homePageUrl, session):
         element is an error message describing the issue.
     """
     logging.info(f"Scraping {homePageUrl}")
-    pageHTML = fetchDataFromURL(homePageUrl, session)
-    if pageHTML["error"] is None:
-        doc = BeautifulSoup(pageHTML["data"], 'html.parser')
+    doc = findValidDoc(homePageUrl, session)
+    if doc is not None:
         docTitle = doc.head.title.string
-        companyName = extractCompanyName(doc)
         if docTitle == "Fund and Fee Information":
+            companyName = extractCompanyName(doc)
             company = Company(companyName)
             logging.info(f"Scraped {homePageUrl}")
             company = extractPDFs(company, doc)
             if len(company.pdfs) == 0:
                 logging.info(f"{companyName}")
-                logging.info(f"{doc.prettify()}")
+                logging.info(f"{doc.prettify}")
                 return None, "This page does not contain any Plan Documents"
             else: 
                 return company, None
         else:
             logging.info(f"Scraped {homePageUrl}")
-            logging.info(f"{homePageUrl}?? Company name - {companyName} | Doc Title - {docTitle}")
-            logging.info(f"{doc.prettify()}")
             return None, "This page does not appear to be a valid TA Page"
     else:
         logging.info(f"Scraped {homePageUrl}")

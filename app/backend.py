@@ -1,6 +1,5 @@
 from asyncio import as_completed
 from .scraper import scrape_pdf_links
-from ..config.logging_config import configure_logging
 from urllib.error import URLError, HTTPError
 from http.client import RemoteDisconnected
 import pandas as pd
@@ -14,11 +13,15 @@ from pathlib import Path
 import time
 import threading
 import win32com.client
+from openpyxl import load_workbook
 
 
 #TODOs 
 # Add front end
 # Add Asset and Plan Participants scraping 
+# See if excel files are open before use
+# Add error handling for when max threads in concurrent calls conflict
+# Look into tkinter application not responding 
 
 
 
@@ -35,11 +38,16 @@ def getTaURLs(xls):
     List[List[str]]: A list of lists, where each inner list contains URLs for the corresponding sheet.
     """
     taUrls = []
-    for xls_sheet_name in xls.sheet_names:
-        df = pd.read_excel(xls, sheet_name = xls_sheet_name)
-        dfUrls = df['URL'].values.tolist()
-        taUrls.append(dfUrls)
-    return taUrls
+    try:
+        for xls_sheet_name in xls.sheet_names:
+            df = pd.read_excel(xls, sheet_name = xls_sheet_name)
+            dfUrls = df['URL'].values.tolist()
+            taUrls.append(dfUrls)
+        return taUrls
+    except Exception as e:
+        logging.exception(f"Error getting TA URLS: {e}")
+        raise e
+    
 
 
 
@@ -68,7 +76,7 @@ def processURLs(taUrls, xls, session):
         df = pd.read_excel(xls, sheet_name = current_sheet)
 
         try:
-            with concurrent.futures.ThreadPoolExecutor(max_workers=5) as executor:
+            with concurrent.futures.ThreadPoolExecutor(max_workers=10) as executor:
                 futureToURL = {executor.submit(scrape_pdf_links, url, session): url for url in sheetList}
 
             for future in concurrent.futures.as_completed(futureToURL):
@@ -89,9 +97,11 @@ def processURLs(taUrls, xls, session):
         try:
             df.to_excel(xls, sheet_name = current_sheet, index=False)
             logging.info(f"File for {current_sheet} saved successfully")
-        except PermissionError as e:
-            logging.error(f'PermissionError: {e}')
+        except PermissionError as pe:
+            logging.error(f'PermissionError: {pe}')
             logging.warning(f"The file is open in another application")
+            raise pe
+
         
     logging.info("--- %s seconds ---" % (time.time() - start_time))
     return companies
@@ -117,9 +127,12 @@ def extractTAExcel(xlPath):
             taUrls = getTaURLs(xls)
             companies = processURLs(taUrls, xls, session)
         return companies
+    except PermissionError as pe:
+        logging.error(f'PermissionError: {pe}')
+        raise pe
     except Exception as e:
         logging.exception(f"Error extracting data from Excel file {xlPath}: {e}")
-        return None
+        raise e
 
     
 
@@ -152,10 +165,13 @@ def saveCompanyandPDFs(companies, outputPath):
     dfCompany = pd.DataFrame(dfCompanyData, columns=['Company', 'Assets', 'Plan Participants'])
 
     #Write DataFrames to Excel file
-    with pd.ExcelWriter(outputPath, engine='openpyxl') as writer:
-        dfPDF.to_excel(writer, sheet_name= 'PDFs', index=False)
-        dfCompany.to_excel(writer, sheet_name='Companies', index = False)
-    return None
+    try:
+        with pd.ExcelWriter(outputPath, engine='openpyxl') as writer:
+            dfPDF.to_excel(writer, sheet_name= 'PDFs', index=False)
+            dfCompany.to_excel(writer, sheet_name='Companies', index = False)
+    except Exception as e:
+        logging.error(e)
+        raise e
 
 
 
@@ -169,9 +185,14 @@ def generateXLSheet(inputPath):
     Returns:
     - None: The function creates an Excel sheet with company and PDF data.
     """
-    companies = extractTAExcel(inputPath)
-    outputPath = inputPath.parent / Path("ScrapedPDFs.xlsx")
-    saveCompanyandPDFs(companies, outputPath)
+    try:
+        companies = extractTAExcel(inputPath)
+        outputPath = inputPath.parent / Path("ScrapedPDFs.xlsx")
+        saveCompanyandPDFs(companies, outputPath)
+    except Exception as e:
+        logging.exception(f"Error generating Excel sheet: {e}")
+        raise e
+
 
 
 
@@ -310,20 +331,33 @@ def extractPDFPages(inputPath):
     addCompanyLinks(inputPath)
     return None
 
-def main():
-
-    #Configure logging 
-    configure_logging(Path("pdf-harvesting-app") / Path("LogFile.log"))
+def is_excel_file_open(file_path):
+    try:
+        # Try to open the file with pandas
+        with pd.ExcelFile(file_path):
+            pass
+        # If successful, the file is not open
+        return False
+    except PermissionError:
+        # If PermissionError occurs, the file is open
+        return True
+    except OSError:
+        return False
     
-    start = time.time()
-    # inputPath = Path('C:/Users/Computer/OneDrive - The Ohio State University/Documents/Mosby Project/pdf-harvesting-app/docs/Formatted TA URLs.xlsx')
-    # generateXLSheet(inputPath)
 
 
-    inputPath = Path('C:/Users/Computer/OneDrive - The Ohio State University/Documents/Mosby Project/pdf-harvesting-app/docs/ScrapedPDFs.xlsx')
+
+def handleScraping(inputPath, outputPath):
+    try:
+        if (not(is_excel_file_open(inputPath) or is_excel_file_open(outputPath))):
+            generateXLSheet(inputPath)
+        else:
+            raise PermissionError
+    except Exception as e:
+        raise e
+
+def handleDownload(inputPathStr):
+    inputPath = Path(inputPathStr)
     extractPDFPages(inputPath)
-    end = time.time()
-    print(f"Time: {end-start}")
 
-if __name__ == "__main__":
-    main()
+
