@@ -17,11 +17,9 @@ from openpyxl import load_workbook
 
 
 #TODOs 
-# Add front end
 # Add Asset and Plan Participants scraping 
 # See if excel files are open before use
 # Add error handling for when max threads in concurrent calls conflict
-# Look into tkinter application not responding 
 
 
 
@@ -218,7 +216,7 @@ def downloadPDF(pdfURL,filePath, maxRetries = 3, retryDelay = 1):
                 out_file.write(data)
             return True
         except (URLError, HTTPError, RemoteDisconnected) as e:
-            logging.error(e)
+            logging.error(f"Dowload PDF Error: {e}")
             retries += 1
             time.sleep(retryDelay)
     return False
@@ -244,7 +242,7 @@ def addCompanyLinks(inputPath):
         with lock:
             companyHotlinks.append(fileDirectory)
 
-    with concurrent.futures.ThreadPoolExecutor(max_workers=5) as executor:
+    with concurrent.futures.ThreadPoolExecutor(max_workers=10) as executor:
         executor.map(downloadAndSave, dfCompany['Company'])
 
     with pd.ExcelWriter(inputPath, if_sheet_exists='replace', mode='a') as writer:
@@ -284,10 +282,12 @@ def extractPDFPages(inputPath):
     """    
     refreshExcel(inputPath)
 
+    
     #Save PDF pages on excel document to local directory
     with pd.ExcelFile(inputPath, engine='openpyxl') as xls:
         dfPDF = pd.read_excel(xls, sheet_name = 'PDFs')
 
+    
     localFilePaths = []
     lock = threading.Lock()
 
@@ -314,19 +314,23 @@ def extractPDFPages(inputPath):
                     logging.warning(f"Failed to download {pdfTitle}")
             except Exception as e:
                 logging.error(f"Error downloading {pdfTitle}: {e}")
+                raise e
         with lock:
                 localFilePaths.append(filePath)
 
     
     with concurrent.futures.ThreadPoolExecutor(max_workers=5) as executor:
         executor.map(downloadAndSave, zip(dfPDF['PDF URL'], dfPDF['PDF Title'], dfPDF['Company']))
-
-    with pd.ExcelWriter(inputPath, if_sheet_exists='replace', mode='a') as writer:
-        #Save FilePath to row
-        dfPDF['Local FilePath'] = localFilePaths
-        dfPDF['Local FilePath'] = dfPDF['Local FilePath'].apply(lambda x: f'=HYPERLINK("{x}", "CLICK FOR FILE")')
-        dfPDF['Company'] = dfPDF['Company'].apply(lambda x: f"=IFERROR(VLOOKUP(\"{x}\",Companies!A:A, 1, FALSE), \"null\")")
-        dfPDF.to_excel(writer, sheet_name = "PDFs", index = False)
+    try:
+        with pd.ExcelWriter(inputPath, if_sheet_exists='replace', mode='a') as writer:
+            #Save FilePath to row
+            dfPDF['Local FilePath'] = localFilePaths
+            dfPDF['Local FilePath'] = dfPDF['Local FilePath'].apply(lambda x: f'=HYPERLINK("{x}", "CLICK FOR FILE")')
+            dfPDF['Company'] = dfPDF['Company'].apply(lambda x: f"=IFERROR(VLOOKUP(\"{x}\",Companies!A:A, 1, FALSE), \"null\")")
+            dfPDF.to_excel(writer, sheet_name = "PDFs", index = False)
+    except Exception as e:
+        logging.error(f"Error saving: {e}")
+        raise e
 
     addCompanyLinks(inputPath)
     return None
@@ -356,8 +360,14 @@ def handleScraping(inputPath, outputPath):
     except Exception as e:
         raise e
 
-def handleDownload(inputPathStr):
-    inputPath = Path(inputPathStr)
-    extractPDFPages(inputPath)
+def handleDownload(inputPath):
+    try:
+        if (not(is_excel_file_open(inputPath))):
+            extractPDFPages(inputPath)
+        else: 
+            raise PermissionError
+    except Exception as e:
+        logging.error(f"Download error: {e}")
+        raise e
 
 

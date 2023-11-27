@@ -164,7 +164,6 @@ def scrape_pdf_links(homePageUrl, session):
             company = extractPDFs(company, doc)
             if len(company.pdfs) == 0:
                 logging.info(f"{companyName}")
-                logging.info(f"{doc.prettify}")
                 return None, "This page does not contain any Plan Documents"
             else: 
                 return company, None
