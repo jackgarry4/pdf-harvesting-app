@@ -9,9 +9,8 @@ import pythoncom
 
 
 def handlePDFScraping():
-    # Ensure CoInitialize is called in the thread
     pythoncom.CoInitialize()
-    
+
     global ScrapeResultText
 
     textColor="black"
@@ -36,7 +35,7 @@ def handlePDFScraping():
     except OSError as ose:
         if ose.errno == 22 or ose.errno == 2:
             logging.error(f'Type Error: {ose}')
-            ScrapeResultText = f"Invalid argument entered.  Please check {inputPath}"
+            ScrapeResultText = f"Invalid argument entered.  Please check file{inputPath}"
         else:
             logging.error(f'ERROR: {ose}')
             ScrapeResultText = f"Error: {str(ose)}"
@@ -79,7 +78,7 @@ def handlePDFDownloading():
     except OSError as ose:
         if ose.errno == 22 or ose.errno == 2:
             logging.error(f'Type Error: {ose}')
-            DownloadResultText = f"Invalid argument entered.  Please check {inputPath}"
+            DownloadResultText = f"Invalid argument entered.  Please check file {inputPath}"
         else:
             logging.error(f'ERROR: {ose}')
             DownloadResultText = f"Error: {str(ose)}"
@@ -127,12 +126,14 @@ if __name__ == '__main__':
     topResultLabel.pack()
 
     bottomLabel = tkinter.Label(bottom_frame, text="Enter PDF file location (Ex: C:...xlsx)")
+    bottomWarning = tkinter.Label(bottom_frame, text="REMEMBER TO CLOSE THE INPUT AND OUTPUT FILES")
     PDFFileEntry = tkinter.Entry(bottom_frame, width = 50)
     downloadPDFButton = tkinter.Button(bottom_frame, text = "Save PDFs", command=lambda: start_thread(handlePDFDownloading))
     bottomResultLabel = tkinter.Label(bottom_frame, wraplength = 400)
 
     bottomLabel.pack(padx = 20, pady = 20)
     PDFFileEntry.pack()
+    bottomWarning.pack()
     downloadPDFButton.pack(pady=20)
     bottomResultLabel.pack()
 

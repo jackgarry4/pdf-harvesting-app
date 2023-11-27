@@ -18,8 +18,9 @@ from openpyxl import load_workbook
 
 #TODOs 
 # Add Asset and Plan Participants scraping 
-# See if excel files are open before use
-# Add error handling for when max threads in concurrent calls conflict
+# Add loading bar
+# Write app use instructions
+
 
 
 
@@ -74,7 +75,8 @@ def processURLs(taUrls, xls, session):
         df = pd.read_excel(xls, sheet_name = current_sheet)
 
         try:
-            with concurrent.futures.ThreadPoolExecutor(max_workers=10) as executor:
+            # with concurrent.futures.ThreadPoolExecutor(max_workers=10) as executor:
+            with concurrent.futures.ThreadPoolExecutor() as executor:
                 futureToURL = {executor.submit(scrape_pdf_links, url, session): url for url in sheetList}
 
             for future in concurrent.futures.as_completed(futureToURL):
@@ -120,8 +122,13 @@ def extractTAExcel(xlPath):
     Returns:
     List[Company] or None: A list of Company objects if extraction is successful, or None in case of an error.
     """
+
     try:
-        with  requests.Session() as session, pd.ExcelFile(xlPath) as xls: 
+        session = requests.Session()
+        adapter = requests.adapters.HTTPAdapter(pool_connections = 100, pool_maxsize = 100)
+        session.mount('http://', adapter)
+        session.mount('https://', adapter)
+        with pd.ExcelFile(xlPath) as xls: 
             taUrls = getTaURLs(xls)
             companies = processURLs(taUrls, xls, session)
         return companies
@@ -216,7 +223,7 @@ def downloadPDF(pdfURL,filePath, maxRetries = 3, retryDelay = 1):
                 out_file.write(data)
             return True
         except (URLError, HTTPError, RemoteDisconnected) as e:
-            logging.error(f"Dowload PDF Error: {e}")
+            logging.error(f"Download PDF Error {retries}: {e}")
             retries += 1
             time.sleep(retryDelay)
     return False
@@ -231,24 +238,30 @@ def addCompanyLinks(inputPath):
     Returns:
     - None: The function adds hyperlinks to the Companies sheet and saves the modified Excel file.
     """
+
     with pd.ExcelFile(inputPath, engine='openpyxl') as xls:
         dfCompany = pd.read_excel(xls, sheet_name='Companies')
 
-    companyHotlinks= []
+    companyHotlinks= {}
     lock = threading.Lock()
 
     def downloadAndSave(company):
-        fileDirectory = inputPath.parent / Path(company)
+        fileDirectory=""
+        if pd.notna(company): 
+            fileDirectory = inputPath.parent / Path(company)
         with lock:
-            companyHotlinks.append(fileDirectory)
+            companyHotlinks[company]= fileDirectory
 
-    with concurrent.futures.ThreadPoolExecutor(max_workers=10) as executor:
+    
+    # with concurrent.futures.ThreadPoolExecutor(max_workers=10) as executor:
+    with concurrent.futures.ThreadPoolExecutor() as executor:
         executor.map(downloadAndSave, dfCompany['Company'])
+    
+    dfCompany['Hotlink'] = dfCompany['Company'].map(companyHotlinks)
+    dfCompany['Hotlink'] = dfCompany['Hotlink'].apply(lambda x: f'=HYPERLINK("{x}", "CLICK FOR FOLDER")')
 
     with pd.ExcelWriter(inputPath, if_sheet_exists='replace', mode='a') as writer:
         #Save FilePath to row
-        dfCompany['Hotlink'] = companyHotlinks
-        dfCompany['Hotlink'] = dfCompany['Hotlink'].apply(lambda x: f'=HYPERLINK("{x}", "CLICK FOR FILE")')
         dfCompany.to_excel(writer, sheet_name = "Companies", index = False)
 
 
@@ -288,7 +301,7 @@ def extractPDFPages(inputPath):
         dfPDF = pd.read_excel(xls, sheet_name = 'PDFs')
 
     
-    localFilePaths = []
+    localFilePaths = {}
     lock = threading.Lock()
 
     def downloadAndSave(pdfData):
@@ -316,16 +329,19 @@ def extractPDFPages(inputPath):
                 logging.error(f"Error downloading {pdfTitle}: {e}")
                 raise e
         with lock:
-                localFilePaths.append(filePath)
+                localFilePaths[pdfURL] = filePath
 
     
-    with concurrent.futures.ThreadPoolExecutor(max_workers=5) as executor:
+    # with concurrent.futures.ThreadPoolExecutor(max_workers=10) as executor:
+    with concurrent.futures.ThreadPoolExecutor() as executor:
         executor.map(downloadAndSave, zip(dfPDF['PDF URL'], dfPDF['PDF Title'], dfPDF['Company']))
+
+    # Update 'Local FilePath' column based on the corresponding pdfURL
+    dfPDF['Local FilePath'] = dfPDF['PDF URL'].map(localFilePaths)
+    dfPDF['Local FilePath'] = dfPDF['Local FilePath'].apply(lambda x: f'=HYPERLINK("{x}", "CLICK FOR FILE")')
+
     try:
         with pd.ExcelWriter(inputPath, if_sheet_exists='replace', mode='a') as writer:
-            #Save FilePath to row
-            dfPDF['Local FilePath'] = localFilePaths
-            dfPDF['Local FilePath'] = dfPDF['Local FilePath'].apply(lambda x: f'=HYPERLINK("{x}", "CLICK FOR FILE")')
             dfPDF['Company'] = dfPDF['Company'].apply(lambda x: f"=IFERROR(VLOOKUP(\"{x}\",Companies!A:A, 1, FALSE), \"null\")")
             dfPDF.to_excel(writer, sheet_name = "PDFs", index = False)
     except Exception as e:
