@@ -4,6 +4,7 @@ import logging
 from ..config.logging_config import configure_logging
 from pathlib import Path
 from threading import Thread
+from tkinter import ttk
 import pythoncom
 
 
@@ -13,6 +14,10 @@ def handlePDFScraping():
 
     global ScrapeResultText
 
+    topProgressBar.pack()
+    topProgressBar['value']= 0
+
+    
     textColor="black"
     inputPath = Path(TAURLFileEntry.get())
     outputPath = inputPath.parent / Path("ScrapedPDFs.xlsx")
@@ -23,9 +28,12 @@ def handlePDFScraping():
     topResultLabel.config(text = ScrapeResultText, fg = textColor)
     window.update()
 
+    def updateProgress(value):
+        topProgressBar['value'] = value
+        window.update()
 
     try:
-        handleScraping(Path(TAURLFileEntry.get()), outputPath)
+        handleScraping(Path(TAURLFileEntry.get()), outputPath, updateProgress)
         ScrapeResultText = "Successfully scraped! Check for ScrapedPDFs file in parent directory"
         textColor = "green"
     except PermissionError as pe:
@@ -42,11 +50,11 @@ def handlePDFScraping():
         textColor = "red"
     except Exception as e:
         logging.error(f'ERROR: {e}')
-        print(type(e))
         ScrapeResultText = f"Error: {str(e)}"
         textColor = "red"
 
     topResultLabel.config(text = ScrapeResultText, fg=textColor)
+    topProgressBar.pack_forget()
     window.update()
 
 
@@ -55,6 +63,9 @@ def handlePDFDownloading():
     pythoncom.CoInitialize()
 
     global DownloadResultText
+
+    bottomProgressBar.pack()
+    bottomProgressBar['value']= 0
 
     textColor="black"
     inputPath = Path(PDFFileEntry.get())
@@ -66,9 +77,12 @@ def handlePDFDownloading():
     bottomResultLabel.config(text = DownloadResultText, fg = textColor)
     window.update()
 
+    def updateProgress(value):
+        bottomProgressBar['value'] = value
+        window.update()
 
     try:
-        handleDownload(Path(PDFFileEntry.get()))
+        handleDownload(Path(PDFFileEntry.get()), updateProgress)
         DownloadResultText = f"Successfully saved! Check for PDFs in {parentPath}"
         textColor = "green"
     except PermissionError as pe:
@@ -91,6 +105,7 @@ def handlePDFDownloading():
 
 
     bottomResultLabel.config(text = DownloadResultText, fg=textColor)
+    bottomProgressBar.pack_forget()
     window.update()
 
 def start_thread(func):
@@ -113,8 +128,10 @@ if __name__ == '__main__':
     top_frame = tkinter.Frame(window).pack()
     bottom_frame = tkinter.Frame(window).pack(side = "bottom")
 
+    #TOP Frame Widgets
     topLabel = tkinter.Label(top_frame, text="Enter TransAmerica URL file location (Ex: C:...xlsx): ")
     topWarning = tkinter.Label(top_frame, text="REMEMBER TO CLOSE THE INPUT AND OUTPUT FILES")
+    topProgressBar = ttk.Progressbar(top_frame, orient="horizontal", length = 200, mode = 'determinate')
     TAURLFileEntry = tkinter.Entry(top_frame, width = 50)
     processURLButton = tkinter.Button(top_frame, text = "Scrape PDFs", command=lambda: start_thread(handlePDFScraping))
     topResultLabel = tkinter.Label(top_frame, wraplength = 400)
@@ -127,6 +144,7 @@ if __name__ == '__main__':
 
     bottomLabel = tkinter.Label(bottom_frame, text="Enter PDF file location (Ex: C:...xlsx)")
     bottomWarning = tkinter.Label(bottom_frame, text="REMEMBER TO CLOSE THE INPUT AND OUTPUT FILES")
+    bottomProgressBar = ttk.Progressbar(top_frame, orient="horizontal", length = 200, mode = 'determinate')
     PDFFileEntry = tkinter.Entry(bottom_frame, width = 50)
     downloadPDFButton = tkinter.Button(bottom_frame, text = "Save PDFs", command=lambda: start_thread(handlePDFDownloading))
     bottomResultLabel = tkinter.Label(bottom_frame, wraplength = 400)

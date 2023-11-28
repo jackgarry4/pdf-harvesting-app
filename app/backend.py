@@ -18,7 +18,8 @@ from openpyxl import load_workbook
 
 #TODOs 
 # Add Asset and Plan Participants scraping 
-# Add loading bar
+# Add loading bar (progress bar) in processURLS for top frame
+# See if we can run in seperate conjoined runs so as not to have massvie runtimes with considerable amounts of data
 # Write app use instructions
 
 
@@ -50,7 +51,7 @@ def getTaURLs(xls):
 
 
 
-def processURLs(taUrls, xls, session):
+def processURLs(taUrls, xls, session, progress_callback):
     """
     Process TransAmerica URLs concurrently, scrape PDF links, and update an Excel file.
 
@@ -69,28 +70,33 @@ def processURLs(taUrls, xls, session):
     """
     start_time = time.time()
     companies = []
+    completedScrapes = 0
 
     for ind, sheetList in enumerate(taUrls):
         current_sheet = xls.sheet_names[ind]
         df = pd.read_excel(xls, sheet_name = current_sheet)
 
         try:
-            # with concurrent.futures.ThreadPoolExecutor(max_workers=10) as executor:
+            totalScrapes = len(sheetList)
+
             with concurrent.futures.ThreadPoolExecutor() as executor:
-                futureToURL = {executor.submit(scrape_pdf_links, url, session): url for url in sheetList}
+                futures = {executor.submit(scrape_pdf_links, url, session): url for url in sheetList}
 
-            for future in concurrent.futures.as_completed(futureToURL):
-                url = futureToURL[future]
-                url_index = df.index[df['URL'] == url][0]
-                companyTuple = future.result()
+                for future in concurrent.futures.as_completed(futures):
+                    url = futures[future]
+                    urlIndex = df.index[df['URL'] == url][0]
+                    companyTuple = future.result()
 
-                
-                if companyTuple[0] is not None:
-                    #Find company by url in xlsPath and write status to excel file
-                    df.at[url_index, 'Active'] = "True"
-                    companies.append(companyTuple[0])
-                else:
-                    df.at[url_index, 'Active'] = str(companyTuple[1])
+                    if companyTuple[0] is not None:
+                        df.at[urlIndex, 'Active'] = "True"
+                        companies.append(companyTuple[0])
+                    else:
+                        df.at[urlIndex, 'Active'] = str(companyTuple[1])
+                    
+                    
+                    completedScrapes += 1
+                    progress = (completedScrapes / totalScrapes)*100
+                    progress_callback(progress)
         except Exception as e:
             logging.error(f"Error scraping: {e}")
             continue
@@ -107,7 +113,7 @@ def processURLs(taUrls, xls, session):
     return companies
 
 
-def extractTAExcel(xlPath):
+def extractTAExcel(xlPath, progress_callback):
     """
     Extract data from a TransAmerica Excel file.
 
@@ -130,7 +136,7 @@ def extractTAExcel(xlPath):
         session.mount('https://', adapter)
         with pd.ExcelFile(xlPath) as xls: 
             taUrls = getTaURLs(xls)
-            companies = processURLs(taUrls, xls, session)
+            companies = processURLs(taUrls, xls, session, progress_callback)
         return companies
     except PermissionError as pe:
         logging.error(f'PermissionError: {pe}')
@@ -180,7 +186,7 @@ def saveCompanyandPDFs(companies, outputPath):
 
 
 
-def generateXLSheet(inputPath):
+def generateXLSheet(inputPath, progress_callback):
     """
     Generate an Excel sheet with company and PDF data.
 
@@ -191,7 +197,7 @@ def generateXLSheet(inputPath):
     - None: The function creates an Excel sheet with company and PDF data.
     """
     try:
-        companies = extractTAExcel(inputPath)
+        companies = extractTAExcel(inputPath, progress_callback)
         outputPath = inputPath.parent / Path("ScrapedPDFs.xlsx")
         saveCompanyandPDFs(companies, outputPath)
     except Exception as e:
@@ -283,7 +289,7 @@ def refreshExcel(inputPath):
     File.Quit()
 
 
-def extractPDFPages(inputPath):
+def extractPDFPages(inputPath, progress_callback):
     """
     Extract PDF data from an Excel file, download PDFs, and update the Excel file.
 
@@ -295,7 +301,6 @@ def extractPDFPages(inputPath):
     """    
     refreshExcel(inputPath)
 
-    
     #Save PDF pages on excel document to local directory
     with pd.ExcelFile(inputPath, engine='openpyxl') as xls:
         dfPDF = pd.read_excel(xls, sheet_name = 'PDFs')
@@ -306,6 +311,7 @@ def extractPDFPages(inputPath):
 
     def downloadAndSave(pdfData):
         pdfURL, pdfTitle, company = pdfData
+
         filePath = "null"
 
         if pd.notna(company):    
@@ -330,12 +336,20 @@ def extractPDFPages(inputPath):
                 raise e
         with lock:
                 localFilePaths[pdfURL] = filePath
+        return None
 
-    
-    # with concurrent.futures.ThreadPoolExecutor(max_workers=10) as executor:
+    totalSaves = len(dfPDF)
+    completedSaves = 0
+
     with concurrent.futures.ThreadPoolExecutor() as executor:
-        executor.map(downloadAndSave, zip(dfPDF['PDF URL'], dfPDF['PDF Title'], dfPDF['Company']))
+        # Use list to force evaluation of all futures
+        futures = {executor.submit(downloadAndSave, data): data for data in zip(dfPDF['PDF URL'], dfPDF['PDF Title'], dfPDF['Company'])}
 
+        for future in concurrent.futures.as_completed(futures):
+            completedSaves+=1
+            progress = (completedSaves/ totalSaves) * 100
+            progress_callback(progress)
+            
     # Update 'Local FilePath' column based on the corresponding pdfURL
     dfPDF['Local FilePath'] = dfPDF['PDF URL'].map(localFilePaths)
     dfPDF['Local FilePath'] = dfPDF['Local FilePath'].apply(lambda x: f'=HYPERLINK("{x}", "CLICK FOR FILE")')
@@ -367,19 +381,19 @@ def is_excel_file_open(file_path):
 
 
 
-def handleScraping(inputPath, outputPath):
+def handleScraping(inputPath, outputPath, progress_callback):
     try:
         if (not(is_excel_file_open(inputPath) or is_excel_file_open(outputPath))):
-            generateXLSheet(inputPath)
+            generateXLSheet(inputPath, progress_callback)
         else:
             raise PermissionError
     except Exception as e:
         raise e
 
-def handleDownload(inputPath):
+def handleDownload(inputPath, progress_callback):
     try:
         if (not(is_excel_file_open(inputPath))):
-            extractPDFPages(inputPath)
+            extractPDFPages(inputPath, progress_callback)
         else: 
             raise PermissionError
     except Exception as e:
