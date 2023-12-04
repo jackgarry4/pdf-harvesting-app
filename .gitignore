@@ -6,6 +6,12 @@ docs/
 #Log file
 LogFile.log
 
+#Build Folder
+build/
+dist/
+main.spec
+TA PDF Harvesting App.spec
+
 # .venv (commonly used by poetry)
 .venv/
 
