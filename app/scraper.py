@@ -1,7 +1,7 @@
 from xml.etree.ElementTree import TreeBuilder
 from bs4 import BeautifulSoup
-from ..classes.Company import Company
-from ..classes.PDF import PDF
+from classes.Company import Company
+from classes.PDF import PDF
 import requests 
 import re
 import logging
@@ -163,7 +163,6 @@ def scrape_pdf_links(homePageUrl, session):
             logging.info(f"Scraped {homePageUrl}")
             company = extractPDFs(company, doc)
             if len(company.pdfs) == 0:
-                logging.info(f"{companyName}")
                 return None, "This page does not contain any Plan Documents"
             else: 
                 return company, None

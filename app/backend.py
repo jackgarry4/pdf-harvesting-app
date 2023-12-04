@@ -1,5 +1,5 @@
 from asyncio import as_completed
-from .scraper import scrape_pdf_links
+from app.scraper import scrape_pdf_links
 from urllib.error import URLError, HTTPError
 from http.client import RemoteDisconnected
 import pandas as pd
@@ -13,13 +13,11 @@ from pathlib import Path
 import time
 import threading
 import win32com.client
-from openpyxl import load_workbook
 
 
 #TODOs 
 # Add Asset and Plan Participants scraping 
-# Add loading bar (progress bar) in processURLS for top frame
-# See if we can run in seperate conjoined runs so as not to have massvie runtimes with considerable amounts of data
+# Figure out how to package program
 # Write app use instructions
 
 
@@ -198,7 +196,7 @@ def generateXLSheet(inputPath, progress_callback):
     """
     try:
         companies = extractTAExcel(inputPath, progress_callback)
-        outputPath = inputPath.parent / Path("ScrapedPDFs.xlsx")
+        outputPath = inputPath.parent / Path(f"{inputPath.stem}_ScrapedPDFs.xlsx")
         saveCompanyandPDFs(companies, outputPath)
     except Exception as e:
         logging.exception(f"Error generating Excel sheet: {e}")
@@ -387,6 +385,8 @@ def handleScraping(inputPath, outputPath, progress_callback):
             generateXLSheet(inputPath, progress_callback)
         else:
             raise PermissionError
+    except KeyError as ke:
+        raise KeyError("Make sure to include URL key in excel")
     except Exception as e:
         raise e
 

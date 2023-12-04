@@ -1,4 +1,4 @@
-from .PDF import PDF
+from classes.PDF import PDF
 
 class Company:
 
