@@ -14,13 +14,20 @@ PDF Harvesting Application is a Python application that scrapes pdfs from TransA
 
 
 ## Install
-The program is run with python installed: 
+The program is run with python installed with cmd command:
 `python main.py`
 
+To download as executable install pyinstaller:
+`pip install pyinstaller`
 
+Run pyinstaller command:
+`pyinstaller -F -w main.py`
 
+The executable will save in the dist folder as main.exe with dependencies integrated due to -F flag.
 
-## Instructions
+## User Instructions
+First the input excel document must be properly created.  This document should include a column titled 'URL'.  This should be the only column in the document.  Contained in this column should be all the URLs pointing to TransAmerica Company Plan home pages.  These pages should look like:
 
-##
+![TransAmerica Page Example]()
+
 
