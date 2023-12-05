@@ -152,7 +152,6 @@ class PDFHarvestingApp:
             textColor = "red"
         except Exception as e:
             logging.error(f'ERROR: {e}')
-            print(type(e))
             DownloadResultText = f"Error: {str(e)}"
             textColor = "red"
 

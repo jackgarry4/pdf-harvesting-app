@@ -17,8 +17,8 @@ import win32com.client
 
 #TODOs 
 # Add Asset and Plan Participants scraping 
-# Figure out how to package program
 # Write app use instructions
+# Permission error
 
 
 
@@ -299,6 +299,10 @@ def extractPDFPages(inputPath, progress_callback):
     """    
     refreshExcel(inputPath)
 
+
+    #Pause to prevent race condition 
+    time.sleep(2)
+
     #Save PDF pages on excel document to local directory
     with pd.ExcelFile(inputPath, engine='openpyxl') as xls:
         dfPDF = pd.read_excel(xls, sheet_name = 'PDFs')
@@ -362,29 +366,13 @@ def extractPDFPages(inputPath, progress_callback):
 
     addCompanyLinks(inputPath)
     return None
-
-def is_excel_file_open(file_path):
-    try:
-        # Try to open the file with pandas
-        with pd.ExcelFile(file_path):
-            pass
-        # If successful, the file is not open
-        return False
-    except PermissionError:
-        # If PermissionError occurs, the file is open
-        return True
-    except OSError:
-        return False
     
 
 
 
 def handleScraping(inputPath, outputPath, progress_callback):
     try:
-        if (not(is_excel_file_open(inputPath) or is_excel_file_open(outputPath))):
-            generateXLSheet(inputPath, progress_callback)
-        else:
-            raise PermissionError
+        generateXLSheet(inputPath, progress_callback)
     except KeyError as ke:
         raise KeyError("Make sure to include URL key in excel")
     except Exception as e:
@@ -392,10 +380,7 @@ def handleScraping(inputPath, outputPath, progress_callback):
 
 def handleDownload(inputPath, progress_callback):
     try:
-        if (not(is_excel_file_open(inputPath))):
-            extractPDFPages(inputPath, progress_callback)
-        else: 
-            raise PermissionError
+        extractPDFPages(inputPath, progress_callback)
     except Exception as e:
         logging.error(f"Download error: {e}")
         raise e
