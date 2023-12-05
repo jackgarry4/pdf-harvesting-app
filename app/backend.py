@@ -13,6 +13,7 @@ from pathlib import Path
 import time
 import threading
 import win32com.client
+import pythoncom
 
 
 #TODOs 
@@ -269,7 +270,7 @@ def addCompanyLinks(inputPath):
         dfCompany.to_excel(writer, sheet_name = "Companies", index = False)
 
 
-def refreshExcel(inputPath):
+def refreshExcel(inputPath, completion_event):
     """
     Refresh all data connections and calculations in an Excel workbook.
 
@@ -279,12 +280,16 @@ def refreshExcel(inputPath):
     Returns:
     - None: The function refreshes the workbook and saves the changes.
     """
+    
+    pythoncom.CoInitialize()
     File = win32com.client.Dispatch("Excel.Application")    
     File.Visible = 1
     Workbook = File.Workbooks.open(str(inputPath))
     Workbook.RefreshAll()
     Workbook.Save()
     File.Quit()
+    completion_event.set()
+    pythoncom.CoUninitialize()
 
 
 def extractPDFPages(inputPath, progress_callback):
@@ -297,15 +302,23 @@ def extractPDFPages(inputPath, progress_callback):
     Returns:
     - None: The function downloads PDFs, updates the Excel file, and adds hyperlinks.
     """    
-    refreshExcel(inputPath)
+    #Create an event for signaling completion
+    completion_event = threading.Event()
 
+    #Start the refreshExcel operation in a seperate thread
+    refresh_thread = threading.Thread(target=refreshExcel, args=(inputPath, completion_event))
+    refresh_thread.start()
 
-    #Pause to prevent race condition 
+    #Wait for the completion event to be set (blocks until set or timeout)
+    completion_event.wait(timeout = 10)
+
+    # Add a delay to allow time for the Excel file to be released by refreshExcel
     time.sleep(2)
-
+    
     #Save PDF pages on excel document to local directory
     with pd.ExcelFile(inputPath, engine='openpyxl') as xls:
         dfPDF = pd.read_excel(xls, sheet_name = 'PDFs')
+
 
     
     localFilePaths = {}
@@ -325,7 +338,6 @@ def extractPDFPages(inputPath, progress_callback):
             #Replace instances of / as will mess up file path
             pdfTitle = pdfTitle.replace("/","-").replace("\n", "")
             filePath = fileDirectory / Path(f"{pdfTitle}.pdf")
-            
             try:
                 #Download the pdf and save to the local file path
                 success = downloadPDF(pdfURL, filePath)
@@ -370,7 +382,7 @@ def extractPDFPages(inputPath, progress_callback):
 
 
 
-def handleScraping(inputPath, outputPath, progress_callback):
+def handleScraping(inputPath, progress_callback):
     try:
         generateXLSheet(inputPath, progress_callback)
     except KeyError as ke:

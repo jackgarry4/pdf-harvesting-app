@@ -84,7 +84,7 @@ class PDFHarvestingApp:
             self.window.update()
 
         try:
-            handleScraping(Path(self.TAURLFileEntry.get()), outputPath, updateProgress)
+            handleScraping(Path(self.TAURLFileEntry.get()), updateProgress)
             ScrapeResultText = "Successfully scraped! Check for ScrapedPDFs file in parent directory"
             textColor = "green"
         except PermissionError as pe:
