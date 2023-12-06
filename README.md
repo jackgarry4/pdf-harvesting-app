@@ -54,7 +54,7 @@ The output file format will include a PDF sheet where each row represents a PDF 
 ![image](https://github.com/jackgarry4/pdf-harvesting-app/assets/86797096/feebc09e-9d60-4d51-ace9-14ae1ef4e845) \
 *Example of Companies Sheet*
 
-If the Company row is deleted, each of the PDFs corresponding will have a null value for company and will not be saved.
+The asset and plan participant values can be manually added to all of these companies.  If the a row in "Companies" is deleted, each of the "PDFs" entries with matching company fields have a null value for company and will not be saved in the next step of the program.  There should 
 
 
 
