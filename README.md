@@ -54,7 +54,9 @@ The output file format will include a PDF sheet where each row represents a PDF 
 ![image](https://github.com/jackgarry4/pdf-harvesting-app/assets/86797096/feebc09e-9d60-4d51-ace9-14ae1ef4e845) \
 *Example of Companies Sheet*
 
-The asset and plan participant values can be manually added to all of these companies.  If the a row in "Companies" is deleted, each of the "PDFs" entries with matching company fields have a null value for company and will not be saved in the next step of the program.  There should 
+The asset and plan participant values can be manually added to all of these companies.  If the a row in Companies sheet is deleted, each of the PDF sheet entries with matching company fields have a null value for company and will not be saved in the next step of the program.  There should not be any reason to make adjustments to the PDF sheet.
+
+Once all of the unnecessary companies that do not meet asset and plan participant criteria are deleted from the Companies sheet, the remaining companies' PDFs can be saved.  This updated file will serve as the input file for saving the pdfs.  The address of this file should be inputted in the second text box entitled "Enter PDF File location" and the "Save PDF" button can be pressed.  The application will save the PDFs in folders organized by Company into the same directory as the inputted "PDF File Location" file.  The application will also update the inputted "PDF File Location" file to have hotlinks pointed to each PDF and pointed to each Company folder.  This can now serve as an index for quick file access.    
 
 
 
