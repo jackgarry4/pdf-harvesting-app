@@ -18,8 +18,6 @@ import pythoncom
 
 #TODOs 
 # Add Asset and Plan Participants scraping 
-# Write app use instructions
-# Permission error
 
 
 
@@ -313,7 +311,7 @@ def extractPDFPages(inputPath, progress_callback):
     completion_event.wait(timeout = 10)
 
     # Add a delay to allow time for the Excel file to be released by refreshExcel
-    time.sleep(2)
+    time.sleep(5)
     
     #Save PDF pages on excel document to local directory
     with pd.ExcelFile(inputPath, engine='openpyxl') as xls:
