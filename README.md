@@ -26,7 +26,7 @@ First the input excel document must be properly created.  The following image ca
 ![Example TA URL input file](https://github.com/jackgarry4/pdf-harvesting-app/assets/86797096/1e3b284d-813a-4f7d-ba53-275f15231264) \
 *Example TA URL Input File*
 
-This document should include a column titled 'URL'.  This should be the only column in the document.  Contained in this column should be all the URLs pointing to TransAmerica Company Plan Home Pages.
+This document should include a column titled 'URL'.  There may be other columns but the program will only read the 'URL' column.  Contained in this column should be all the URLs pointing to TransAmerica Company Plan Home Pages.
 
 ![TA Company Plan Front PAge](https://github.com/jackgarry4/pdf-harvesting-app/assets/86797096/8d3def2f-227d-4811-b00b-c311344e74d0) \
 *Example of a TransAmerica Company Plan Home Page*
