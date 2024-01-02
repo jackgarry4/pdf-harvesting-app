@@ -5,6 +5,7 @@ from classes.PDF import PDF
 import requests 
 import re
 import logging
+import time
 
 
 
@@ -23,23 +24,30 @@ def fetchDataFromURL(url, session, max_retries = 3):
     - dict: A dictionary with 'data' containing the HTML response text (if successful),
             and 'error' containing the error message (if an error occurs).
     """
+
+    #Client server has rare breaks in remote end connection, so need to retry in these instances
     for attempt in range(max_retries):
+        waitTime = min(2**attempt, 30)
         try:
-            pageData = session.get(url)
+            pageData = session.get(url, timeout = (30,30))
             pageData.raise_for_status()
             return {'data': pageData.text, 'error': None}
         except requests.exceptions.HTTPError as errh:
-            logging.warning(f'HTTP Error: {errh}')
-            return {'data': None, 'error': f'HTTP Error: {errh}'}
+            logging.warning(f'HTTP Error on attempt {attempt+1} : {errh}. Failed to fetch data from {url}. ')
+            time.sleep(waitTime)
+            continue
         except requests.exceptions.ConnectionError as errc:
-            logging.warning(f'Error Connecting: {errc}')
-            return {'data': None, 'error': f'Error connecting: {errc}'}
+            logging.warning(f'Error Connecting on attempt {attempt+1}: {errc}. Failed to fetch data from {url}.')
+            time.sleep(waitTime)
+            continue
         except requests.exceptions.Timeout as errt:
-            logging.warning(f'Timeout Error: {errt}')
-            return {'data': None, 'error': f'Timeout Error: {errt}'}
+            logging.warning(f'Timeout Error on attempt {attempt+1}: {errt}. Failed to fetch data from {url}.')
+            time.sleep(waitTime)
+            continue
         except requests.exceptions.RequestException as e: 
-            logging.warning(f'Oops: Something else {e}')
-            return {'data': None, 'error': f'Oops error: {e}'}
+            logging.warning(f'Oops on attempt {attempt+1}: Something else {e}. Failed to fetch data from {url}.')
+            time.sleep(waitTime)
+            continue
     return {'data': None, 'error': f'Max retries reached.  Failed to fetch data from {url}'}
     
 
@@ -128,12 +136,13 @@ def findValidDoc(homePageUrl, session):
                 logging.info("Valid doc found")
                 return doc
             else:
-                logging.info("Invalid doc found")
+                logging.warning(f"Error: Invalid doc found {homePageUrl} (No Account Value).  Rerunning for correct output...")
                 return findValidDoc(homePageUrl, session)
         else: 
-            logging.info("Invalid doc found")
+            logging.warning(f"Error: Invalid doc found {homePageUrl} (Error is not none) Rerunning for correct output...")
             return findValidDoc(homePageUrl, session) 
     else:
+        logging.error(pageHTML['error'])
         return None
 
 
@@ -167,10 +176,9 @@ def scrape_pdf_links(homePageUrl, session):
             else: 
                 return company, None
         else:
-            logging.info(f"Scraped {homePageUrl}")
+            logging.info(f"{homePageUrl} does not appear to be a valid TA page")
             return None, "This page does not appear to be a valid TA Page"
     else:
-        logging.info(f"Scraped {homePageUrl}")
-        return None, "Error fetching HTML: {pageHTML['error']}"
+        return None, f"Error fetching"
 
 

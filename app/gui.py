@@ -17,6 +17,8 @@ class PDFHarvestingApp:
         
         self.create_gui_elements()
 
+        self.window.protocol("WM_DELETE_WINDOW", self.on_close)
+
     def create_gui_elements(self):
         top_frame = tkinter.Frame(self.window).pack()
         bottom_frame = tkinter.Frame(self.window).pack(side = "bottom")
@@ -55,6 +57,10 @@ class PDFHarvestingApp:
     def run(self):
         self.window.mainloop()
 
+    def on_close(self):
+        logging.info("Exiting Program")
+        self.window.destroy()
+
         
 
 
@@ -77,8 +83,8 @@ class PDFHarvestingApp:
         self.topResultLabel.config(text = ScrapeResultText, fg = textColor)
         self.window.update()
 
-        def updateProgress(value):
-            ScrapeResultText = f"Loading...{value}%"
+        def updateProgress(stage, value):
+            ScrapeResultText = f"{stage}...{value}%"
             self.topResultLabel.config(text = ScrapeResultText, fg = "black")
             self.topProgressBar['value'] = value
             self.window.update()

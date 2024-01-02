@@ -14,10 +14,10 @@ import time
 import threading
 import win32com.client
 import pythoncom
+from pathlib import Path
+import openpyxl
 
 
-#TODOs 
-# Add Asset and Plan Participants scraping 
 
 
 
@@ -93,7 +93,8 @@ def processURLs(taUrls, xls, session, progress_callback):
                     
                     completedScrapes += 1
                     progress = (completedScrapes / totalScrapes)*100
-                    progress_callback(progress)
+                    logging.info(f"Progress - {progress}%")
+                    progress_callback("Loading", progress)
         except Exception as e:
             logging.error(f"Error scraping: {e}")
             continue
@@ -144,7 +145,7 @@ def extractTAExcel(xlPath, progress_callback):
 
     
 
-def saveCompanyandPDFs(companies, outputPath):
+def saveCompanyandPDFs(companies, outputPath, progress_callback):
     """
     Save company and PDF data to an Excel file.
 
@@ -159,7 +160,12 @@ def saveCompanyandPDFs(companies, outputPath):
     dfPDFData = []
     dfCompanyData = []
 
-    for company in companies:
+
+    for count, company in enumerate(companies):
+        logging.info(f"Saving {company.name} to excel")
+        progress = count / len(companies)
+        logging.info(f"Progress - {progress}%")
+        progress_callback("Saving Excel", progress)
         dfCompanyData.append({'Company' : company.name, 'Assets' : 0, 'Plan Participants' : 0})
         for pdf in company.pdfs:
             dfPDFData.append({
@@ -169,14 +175,14 @@ def saveCompanyandPDFs(companies, outputPath):
                 'Source' : pdf.source})
             
     #Create DataFrames
-    dfPDF = pd.DataFrame(dfPDFData, columns=['Company', 'PDF Title', 'PDF URL', 'Source'])
     dfCompany = pd.DataFrame(dfCompanyData, columns=['Company', 'Assets', 'Plan Participants'])
+    dfPDF = pd.DataFrame(dfPDFData, columns=['Company', 'PDF Title', 'PDF URL', 'Source'])
 
     #Write DataFrames to Excel file
     try:
         with pd.ExcelWriter(outputPath, engine='openpyxl') as writer:
-            dfPDF.to_excel(writer, sheet_name= 'PDFs', index=False)
             dfCompany.to_excel(writer, sheet_name='Companies', index = False)
+            dfPDF.to_excel(writer, sheet_name= 'PDFs', index=False)
     except Exception as e:
         logging.error(e)
         raise e
@@ -196,7 +202,7 @@ def generateXLSheet(inputPath, progress_callback):
     try:
         companies = extractTAExcel(inputPath, progress_callback)
         outputPath = inputPath.parent / Path(f"{inputPath.stem}_ScrapedPDFs.xlsx")
-        saveCompanyandPDFs(companies, outputPath)
+        saveCompanyandPDFs(companies, outputPath, progress_callback)
     except Exception as e:
         logging.exception(f"Error generating Excel sheet: {e}")
         raise e
@@ -268,7 +274,7 @@ def addCompanyLinks(inputPath):
         dfCompany.to_excel(writer, sheet_name = "Companies", index = False)
 
 
-def refreshExcel(inputPath, completion_event):
+def refreshExcel(inputPath):
     """
     Refresh all data connections and calculations in an Excel workbook.
 
@@ -278,7 +284,7 @@ def refreshExcel(inputPath, completion_event):
     Returns:
     - None: The function refreshes the workbook and saves the changes.
     """
-    
+    logging.info(f"Input Path: {inputPath}")
     pythoncom.CoInitialize()
     File = win32com.client.Dispatch("Excel.Application")    
     File.Visible = 1
@@ -286,7 +292,6 @@ def refreshExcel(inputPath, completion_event):
     Workbook.RefreshAll()
     Workbook.Save()
     File.Quit()
-    completion_event.set()
     pythoncom.CoUninitialize()
 
 
@@ -299,31 +304,46 @@ def extractPDFPages(inputPath, progress_callback):
 
     Returns:
     - None: The function downloads PDFs, updates the Excel file, and adds hyperlinks.
-    """    
-    #Create an event for signaling completion
-    completion_event = threading.Event()
+    """  
 
-    #Start the refreshExcel operation in a seperate thread
-    refresh_thread = threading.Thread(target=refreshExcel, args=(inputPath, completion_event))
+
+    logging.info("Refreshing excel")
+
+    # Create an event object
+    refresh_event = threading.Event()
+    logging.info("Create threading Event")
+
+    # Function to refresh Excel and set the event
+    def refresh_and_set_event(inputPath):
+        logging.info("Refresh Excel call")
+        refreshExcel(inputPath)
+        logging.info("Refresh event set")
+        time.sleep(10)
+        refresh_event.set()
+
+    # Start a thread to refresh Excel
+    refresh_thread = threading.Thread(target=refresh_and_set_event, args=(inputPath,))
     refresh_thread.start()
+    logging.info("Thread started")
 
-    #Wait for the completion event to be set (blocks until set or timeout)
-    completion_event.wait(timeout = 10)
-
-    # Add a delay to allow time for the Excel file to be released by refreshExcel
-    time.sleep(5)
+    # Wait for the event to be set (refreshExcel is completed)
+    refresh_event.wait()
+    logging.info("Done refreshing")
+  
     
     #Save PDF pages on excel document to local directory
     with pd.ExcelFile(inputPath, engine='openpyxl') as xls:
-        dfPDF = pd.read_excel(xls, sheet_name = 'PDFs')
+        dfPDF = pd.read_excel(xls, sheet_name = 'PDFs', engine='openpyxl')
 
-
+    logging.info(f"{dfPDF.head}")
     
     localFilePaths = {}
     lock = threading.Lock()
 
     def downloadAndSave(pdfData):
         pdfURL, pdfTitle, company = pdfData
+        
+        logging.info(f"Company {company}")
 
         filePath = "null"
 
