@@ -15,7 +15,7 @@ import threading
 import win32com.client
 import pythoncom
 from pathlib import Path
-import openpyxl
+
 
 
 
@@ -94,7 +94,7 @@ def processURLs(taUrls, xls, session, progress_callback):
                     completedScrapes += 1
                     progress = (completedScrapes / totalScrapes)*100
                     logging.info(f"Progress - {progress}%")
-                    progress_callback("Loading", progress)
+                    progress_callback(f"Loading...{progress}%", progress)
         except Exception as e:
             logging.error(f"Error scraping: {e}")
             continue
@@ -163,9 +163,9 @@ def saveCompanyandPDFs(companies, outputPath, progress_callback):
 
     for count, company in enumerate(companies):
         logging.info(f"Saving {company.name} to excel")
-        progress = count / len(companies)
+        progress = count / len(companies) * 100
         logging.info(f"Progress - {progress}%")
-        progress_callback("Saving Excel", progress)
+        progress_callback(f"Saving Excel...{progress}%", progress)
         dfCompanyData.append({'Company' : company.name, 'Assets' : 0, 'Plan Participants' : 0})
         for pdf in company.pdfs:
             dfPDFData.append({
@@ -232,7 +232,7 @@ def downloadPDF(pdfURL,filePath, maxRetries = 3, retryDelay = 1):
                 out_file.write(data)
             return True
         except (URLError, HTTPError, RemoteDisconnected) as e:
-            logging.error(f"Download PDF Error {retries}: {e}")
+            logging.warning(f"Download PDF {pdfURL} Error {retries}: {e}")
             retries += 1
             time.sleep(retryDelay)
     return False
@@ -334,8 +334,6 @@ def extractPDFPages(inputPath, progress_callback):
     #Save PDF pages on excel document to local directory
     with pd.ExcelFile(inputPath, engine='openpyxl') as xls:
         dfPDF = pd.read_excel(xls, sheet_name = 'PDFs', engine='openpyxl')
-
-    logging.info(f"{dfPDF.head}")
     
     localFilePaths = {}
     lock = threading.Lock()
@@ -362,7 +360,7 @@ def extractPDFPages(inputPath, progress_callback):
                 if success:
                     logging.info(f"{pdfTitle} saved successfully")
                 else:
-                    logging.warning(f"Failed to download {pdfTitle}")
+                    logging.warning(f"Failed to download {pdfTitle} {company}")
             except Exception as e:
                 logging.error(f"Error downloading {pdfTitle}: {e}")
                 raise e
@@ -380,7 +378,7 @@ def extractPDFPages(inputPath, progress_callback):
         for future in concurrent.futures.as_completed(futures):
             completedSaves+=1
             progress = (completedSaves/ totalSaves) * 100
-            progress_callback(progress)
+            progress_callback(f"Loading...{progress}%", progress)
             
     # Update 'Local FilePath' column based on the corresponding pdfURL
     dfPDF['Local FilePath'] = dfPDF['PDF URL'].map(localFilePaths)

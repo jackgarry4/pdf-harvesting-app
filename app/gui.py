@@ -61,109 +61,94 @@ class PDFHarvestingApp:
         logging.info("Exiting Program")
         self.window.destroy()
 
-        
-
 
     def handlePDFScraping(self):
         pythoncom.CoInitialize()
 
-        global ScrapeResultText
-
-        self.topProgressBar.configure(length=200)
-        self.topProgressBar['value']= 0
-
         
-        textColor="black"
         inputPath = Path(self.TAURLFileEntry.get())
         outputPath = inputPath.parent / Path("ScrapedPDFs.xlsx")
 
         logging.info("Scrape PDFs button clicked")
 
-        ScrapeResultText = "Loading..."
-        self.topResultLabel.config(text = ScrapeResultText, fg = textColor)
-        self.window.update()
-
-        def updateProgress(stage, value):
-            ScrapeResultText = f"{stage}...{value}%"
-            self.topResultLabel.config(text = ScrapeResultText, fg = "black")
-            self.topProgressBar['value'] = value
-            self.window.update()
+        self.updateTopProgress("Loading...", 0)
 
         try:
-            handleScraping(Path(self.TAURLFileEntry.get()), updateProgress)
-            ScrapeResultText = "Successfully scraped! Check for ScrapedPDFs file in parent directory"
+            handleScraping(Path(self.TAURLFileEntry.get()), self.updateTopProgress)
+            resultText = "Successfully scraped! Check for ScrapedPDFs file in parent directory"
             textColor = "green"
         except PermissionError as pe:
             logging.error(f'Permission Error: {pe}')
-            ScrapeResultText = f"Permission error: Make sure to close input ({inputPath}) and output ({outputPath}) TransAmerica URL File"
+            resultText = f"Permission error: Make sure to close input ({inputPath}) and output ({outputPath}) TransAmerica URL File"
             textColor = "red"
         except OSError as ose:
             if ose.errno == 22 or ose.errno == 2:
                 logging.error(f'Type Error: {ose}')
-                ScrapeResultText = f"Invalid argument entered.  Please check file{inputPath}"
+                resultText = f"Invalid argument entered.  Please check file{inputPath}"
             else:
                 logging.error(f'ERROR: {ose}')
-                ScrapeResultText = f"Error: {str(ose)}"
+                resultText = f"Error: {str(ose)}"
             textColor = "red"
         except Exception as e:
             logging.error(f'ERROR: {e}')
-            ScrapeResultText = f"Error: {str(e)}"
+            resultText = f"Error: {str(e)}"
             textColor = "red"
 
-        self.topResultLabel.config(text = ScrapeResultText, fg=textColor)
-        self.topProgressBar.config(length=0)
-        self.window.update()
+        self.updateTopProgress(resultText = resultText, value = 0, textColor = textColor)
 
 
     def handlePDFDownloading(self):
         # Ensure CoInitialize is called in the thread
         pythoncom.CoInitialize()
 
-        global DownloadResultText
-
-        self.bottomProgressBar.config(length=200)
-        self.bottomProgressBar['value']= 0
-
-        textColor="black"
         inputPath = Path(self.PDFFileEntry.get())
         parentPath = inputPath.parent
 
         logging.info("Save PDFs button clicked")
 
-        DownloadResultText = "Loading..."
-        self.bottomResultLabel.config(text = DownloadResultText, fg = textColor)
-        self.window.update()
-
-        def updateProgress(value):
-            DownloadResultText = f"Loading...{value}%"
-            self.bottomResultLabel.config(text = DownloadResultText, fg = textColor)
-            self.bottomProgressBar['value'] = value
-            self.window.update()
+        self.updateBottomProgress("Loading...", 0)
 
         try:
-            handleDownload(Path(self.PDFFileEntry.get()), updateProgress)
-            DownloadResultText = f"Successfully saved! Check for PDFs in {parentPath}"
+            handleDownload(Path(self.PDFFileEntry.get()), self.updateBottomProgress)
+            resultText = f"Successfully saved! Check for PDFs in {parentPath}"
             textColor = "green"
         except PermissionError as pe:
             logging.error(f'Permission Error: {pe}')
-            DownloadResultText = f"Permission error: Make sure to close input ({inputPath})"
+            resultText = f"Permission error: Make sure to close input ({inputPath})"
             textColor = "red"
         except OSError as ose:
             if ose.errno == 22 or ose.errno == 2:
                 logging.error(f'Type Error: {ose}')
-                DownloadResultText = f"Invalid argument entered.  Please check file {inputPath}"
+                resultText = f"Invalid argument entered.  Please check file {inputPath}"
             else:
                 logging.error(f'ERROR: {ose}')
-                DownloadResultText = f"Error: {str(ose)}"
+                resultText = f"Error: {str(ose)}"
             textColor = "red"
         except Exception as e:
             logging.error(f'ERROR: {e}')
-            DownloadResultText = f"Error: {str(e)}"
+            resultText = f"Error: {str(e)}"
             textColor = "red"
 
 
-        self.bottomResultLabel.config(text = DownloadResultText, fg=textColor)
-        self.bottomProgressBar.config(length = 0)
+        self.updateBottomProgress(resultText = resultText, value = 0, textColor = textColor)
+
+
+    def updateBottomProgress(self, resultText, value, textColor = "black"):
+        if (value == 0):
+            self.bottomProgressBar.config(length = 0)
+        else:
+            self.bottomProgressBar.config(length = 200)
+        self.bottomResultLabel.config(text = resultText, fg = textColor)
+        self.bottomProgressBar['value'] = value
+        self.window.update()
+
+    def updateTopProgress(self, resultText, value, textColor = "black"):
+        if (value == 0):
+            self.topProgressBar.config(length = 0)
+        else:
+            self.topProgressBar.config(length = 200)
+        self.topResultLabel.config(text = resultText, fg = textColor)
+        self.topProgressBar['value'] = value
         self.window.update()
 
     def start_thread(self, func):
