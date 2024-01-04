@@ -6,7 +6,6 @@ from threading import Thread, Event
 from tkinter import ttk
 import pythoncom
 import time
-import threading
 
 
 stop_flag = False
@@ -81,7 +80,6 @@ class PDFHarvestingApp:
 
         self.updateTopProgress("Loading...", 0)
 
-        logging.info(f"handlePDFscraping Thread: {threading.current_thread()}")
         try:
             handleScraping(Path(self.TAURLFileEntry.get()), self.updateTopProgress)
             resultText = "Successfully scraped! Check for ScrapedPDFs file in parent directory"

@@ -201,7 +201,6 @@ def scrape_pdf_links(homePageUrl, session):
         element is an error message describing the issue.
     """
 
-    logging.info(stop_flag)
     if stop_flag:
         logging.info("Program was closed")
         return None, f"Program was closed"

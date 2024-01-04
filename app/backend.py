@@ -203,6 +203,7 @@ def generateXLSheet(inputPath, progress_callback):
         raise e
 
 
+##########################################################################
 
 
 
@@ -233,6 +234,9 @@ def downloadPDF(pdfURL,filePath, maxRetries = 3, retryDelay = 1):
             retries += 1
             time.sleep(retryDelay)
     return False
+
+
+
 
 def addCompanyLinks(inputPath):
     """
