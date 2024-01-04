@@ -112,38 +112,54 @@ def extractPDFs(company, doc):
     from the anchor tags within that section. For each anchor tag, it obtains the PDF URL and title, creates
     a PDF object, and adds it to the provided Company.
     """
-    planDocsHTML = doc.find(id='planDocuments')
-    anchorInstances = planDocsHTML.find_all('a')
-    for a in anchorInstances:
-        pdfUrlJS = a['href']
-        pdfUrl = extractUrlFromExpression(pdfUrlJS)
-        pdfTitle = a.find('li').text
-        company.add_pdf(pdfUrl, pdfTitle)
+    try: 
+        planDocsHTML = doc.find(id='planDocuments')
+        if planDocsHTML:
+            anchorInstances = planDocsHTML.find_all('a')
+            for a in anchorInstances:
+                try:
+                    pdfUrlJS = a['href']
+                    pdfUrl = extractUrlFromExpression(pdfUrlJS)
+                    pdfTitle = a.find('li').text
+                    company.add_pdf(pdfUrl, pdfTitle)
+                except (AttributeError, KeyError, IndexError) as e:
+                    logging.error(f"Error extracting PDF information {company}")
+    except Exception as e:
+        logging.error(f"Error extracting PDFs {company}: {e}")
     return company
 
 
 def findValidDoc(homePageUrl, session):
-    pageHTML = fetchDataFromURL(homePageUrl, session)
-    if pageHTML['error'] is None:
-        doc = BeautifulSoup(pageHTML["data"], 'html.parser')
-        #Check to see if the account number exists and if not run fetchData again until it does
-        accountNumberTable = doc.find('table', {'style': 'background-color:#F8F8F8;border-width: thin;border-collapse:collapse;border-color:#DCDCDC'})
-        # Find the cell with the label "Account #:"
-        accountLabelCell = accountNumberTable.find('td', text='Account #:')
-        if accountLabelCell and accountLabelCell.find_next('td'):
-            accountValue = accountLabelCell.find_next('td').text.strip()
-            if accountValue:
-                logging.info("Valid doc found")
-                return doc
-            else:
-                logging.warning(f"Error: Invalid doc found {homePageUrl} (No Account Value).  Rerunning for correct output...")
-                return findValidDoc(homePageUrl, session)
-        else: 
-            logging.warning(f"Error: Invalid doc found {homePageUrl} (Error is not none) Rerunning for correct output...")
-            return findValidDoc(homePageUrl, session) 
-    else:
-        logging.error(pageHTML['error'])
-        return None
+    try:
+        pageHTML = fetchDataFromURL(homePageUrl, session)
+        if pageHTML['error'] is None:
+            doc = BeautifulSoup(pageHTML["data"], 'html.parser')
+            #Check to see if the account number exists and if not run fetchData again until it does
+            accountNumberTable = doc.find('table', {'style': 'background-color:#F8F8F8;border-width: thin;border-collapse:collapse;border-color:#DCDCDC'})
+            # Find the cell with the label "Account #:"
+            accountLabelCell = accountNumberTable.find('td', text='Account #:')
+            
+            try:
+                if accountLabelCell and accountLabelCell.find_next('td'):
+                    accountValue = accountLabelCell.find_next('td').text.strip()
+                    if accountValue:
+                        logging.info("Valid doc found")
+                        return doc
+                    else:
+                        logging.warning(f"Error: Invalid doc found {homePageUrl} (No Account Value).  Rerunning for correct output...")
+                        return findValidDoc(homePageUrl, session)
+                else: 
+                    logging.warning(f"Error: Invalid doc found {homePageUrl} (Error is not none) Rerunning for correct output...")
+                    return findValidDoc(homePageUrl, session) 
+            except Exception as e:
+                logging.error(f"Error extracting account value {homePageUrl}: {e}")
+                return None
+        else:
+            logging.error(pageHTML['error'])
+            return None
+    except Exception as e:
+        logging.error(f"Error fetching data from URL {homePageUrl}: {e}")
+        return findValidDoc(homePageUrl, session)
 
 
 

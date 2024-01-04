@@ -48,68 +48,56 @@ def getTaURLs(xls):
 
 
 
+def processURL(url, session, df):          
+    try:
+        urlIndex = df.index[df['URL'] == url][0]
+        companyTuple = scrape_pdf_links(url, session)
+
+        if companyTuple[0] is not None:
+            df.at[urlIndex, 'Active'] = "True"
+            companies.append(companyTuple[0])
+        else:
+            df.at[urlIndex, 'Active'] = str(companyTuple[1])
+        
+        return True
+    except Exception as e:
+        logging.error(f"Error scraping: {e}")
+        return False
+    
+
+
+def updateExcel(df, xls, current_sheet):
+    try:
+        df.to_excel(xls, sheet_name = current_sheet, index=False)
+        logging.info(f"File for {current_sheet} saved successfully")
+    except PermissionError as pe:
+        logging.error(f'PermissionError: {pe}')
+        logging.warning(f"The file is open in another application")
+        raise pe
+    
 def processURLs(taUrls, xls, session, progress_callback):
-    """
-    Process TransAmerica URLs concurrently, scrape PDF links, and update an Excel file.
-
-    This function takes a list of lists containing TransAmerica URLs, an Excel file,
-    and a session object for making HTTP requests. It utilizes a ThreadPoolExecutor
-    for concurrent processing of URLs, scrapes PDF links, updates the corresponding
-    Excel file with the status of each URL, and returns a list of Company objects.
-
-    Parameters:
-    - taUrls (List[List[str]]): List of lists, where each inner list contains URLs for a sheet.
-    - xls (str): Path to the Excel file.
-    - session: Session object for making HTTP requests.
-
-    Returns:
-    List[Company]: A list of Company objects representing the processed companies.
-    """
     start_time = time.time()
+    global companies
     companies = []
     completedScrapes = 0
 
     for ind, sheetList in enumerate(taUrls):
         current_sheet = xls.sheet_names[ind]
         df = pd.read_excel(xls, sheet_name = current_sheet)
+        totalScrapes = len(sheetList)
 
-        try:
-            totalScrapes = len(sheetList)
-
-            with concurrent.futures.ThreadPoolExecutor() as executor:
-                futures = {executor.submit(scrape_pdf_links, url, session): url for url in sheetList}
+        with concurrent.futures.ThreadPoolExecutor() as executor:
+                futures = {executor.submit(processURL, url, session, df): url for url in sheetList}
 
                 for future in concurrent.futures.as_completed(futures):
-                    url = futures[future]
-                    urlIndex = df.index[df['URL'] == url][0]
-                    companyTuple = future.result()
-
-                    if companyTuple[0] is not None:
-                        df.at[urlIndex, 'Active'] = "True"
-                        companies.append(companyTuple[0])
-                    else:
-                        df.at[urlIndex, 'Active'] = str(companyTuple[1])
-                    
-                    
                     completedScrapes += 1
-                    progress = (completedScrapes / totalScrapes)*100
+                    progress = (completedScrapes / totalScrapes) * 100
                     logging.info(f"Progress - {progress}%")
                     progress_callback(f"Loading...{progress}%", progress)
-        except Exception as e:
-            logging.error(f"Error scraping: {e}")
-            continue
-        try:
-            df.to_excel(xls, sheet_name = current_sheet, index=False)
-            logging.info(f"File for {current_sheet} saved successfully")
-        except PermissionError as pe:
-            logging.error(f'PermissionError: {pe}')
-            logging.warning(f"The file is open in another application")
-            raise pe
 
-        
+                updateExcel(df, xls, current_sheet)
     logging.info("--- %s seconds ---" % (time.time() - start_time))
     return companies
-
 
 def extractTAExcel(xlPath, progress_callback):
     """

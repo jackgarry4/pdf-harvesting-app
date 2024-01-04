@@ -2,7 +2,7 @@ import tkinter
 from app.backend import handleScraping, handleDownload
 import logging 
 from pathlib import Path
-from threading import Thread
+from threading import Thread, Event
 from tkinter import ttk
 import pythoncom
 
@@ -14,7 +14,6 @@ class PDFHarvestingApp:
         self.window = window
         self.window.geometry("450x500")
         self.window.title("PDF Harvesting Application")
-        
         self.create_gui_elements()
 
         self.window.protocol("WM_DELETE_WINDOW", self.on_close)
@@ -134,22 +133,24 @@ class PDFHarvestingApp:
 
 
     def updateBottomProgress(self, resultText, value, textColor = "black"):
-        if (value == 0):
-            self.bottomProgressBar.config(length = 0)
-        else:
+        if (value > 0):
             self.bottomProgressBar.config(length = 200)
+        else:
+            self.bottomProgressBar.config(length = 0)
         self.bottomResultLabel.config(text = resultText, fg = textColor)
         self.bottomProgressBar['value'] = value
         self.window.update()
+        
 
     def updateTopProgress(self, resultText, value, textColor = "black"):
-        if (value == 0):
-            self.topProgressBar.config(length = 0)
-        else:
+        if (value > 0):
             self.topProgressBar.config(length = 200)
+        else:
+            self.topProgressBar.config(length = 0)
         self.topResultLabel.config(text = resultText, fg = textColor)
         self.topProgressBar['value'] = value
         self.window.update()
+        
 
     def start_thread(self, func):
         t = Thread(target = func)
