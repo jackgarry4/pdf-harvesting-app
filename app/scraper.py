@@ -7,7 +7,9 @@ import re
 import logging
 import time
 
+
 MAX_RETRIES = 3
+stop_flag = False
 
 
 def fetchDataFromURL(url, session, max_retries = MAX_RETRIES):
@@ -25,6 +27,8 @@ def fetchDataFromURL(url, session, max_retries = MAX_RETRIES):
             and 'error' containing the error message (if an error occurs).
     """
 
+    if stop_flag:
+        return None
     #Client server has rare breaks in remote end connection, so need to retry in these instances
     for attempt in range(max_retries):
         waitTime = min(2**attempt, 30)
@@ -141,6 +145,8 @@ def findValidDoc(homePageUrl, session, recursionDepth = 0):
             - Returns a BeautifulSoup object if a valid document is found.
             - Returns None if a valid document is not found after reaching the maximum recursion depth.
     """
+    if stop_flag:
+        return None
     try:
         if recursionDepth >= 3:
             logging.warning(f"Max recursion depth reached for {homePageUrl}. Aborting")
@@ -170,7 +176,7 @@ def findValidDoc(homePageUrl, session, recursionDepth = 0):
                 logging.warning(f"Error: Invalid doc found {homePageUrl} (Error is not none) Rerunning for correct output...")
         except Exception as e:
             logging.error(f"Error extracting account value {homePageUrl}: {e}")
-
+        
         return findValidDoc(homePageUrl, session, recursionDepth + 1)  
             
     except Exception as e:
@@ -194,10 +200,17 @@ def scrape_pdf_links(homePageUrl, session):
       - If there's an error during the HTTP request or parsing, the first element is None, and the second
         element is an error message describing the issue.
     """
+
+    logging.info(stop_flag)
+    if stop_flag:
+        logging.info("Program was closed")
+        return None, f"Program was closed"
+    
     logging.info(f"Scraping {homePageUrl}")
     doc = findValidDoc(homePageUrl, session)
+    
 
-    if doc is not None:
+    if doc is not None and not stop_flag:
         docTitle = doc.head.title.string
         if docTitle == "Fund and Fee Information":
             companyName = extractCompanyName(doc)
@@ -219,3 +232,6 @@ def scrape_pdf_links(homePageUrl, session):
         return None, f"Error fetching {homePageUrl}"
 
 
+def stopProcessingScraper():
+    global stop_flag
+    stop_flag = True

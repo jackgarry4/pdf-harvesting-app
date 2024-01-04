@@ -1,5 +1,5 @@
 from asyncio import as_completed
-from app.scraper import scrape_pdf_links
+from app.scraper import scrape_pdf_links, stopProcessingScraper
 from urllib.error import URLError, HTTPError
 from http.client import RemoteDisconnected
 import pandas as pd
@@ -18,7 +18,7 @@ from pathlib import Path
 
 
 
-
+stop_flag = False
 
 
 
@@ -48,7 +48,7 @@ def getTaURLs(xls):
 
 
 
-def processURL(url, session, df):          
+def processURL(url, session, df): 
     try:
         urlIndex = df.index[df['URL'] == url][0]
         companyTuple = scrape_pdf_links(url, session)
@@ -85,16 +85,22 @@ def processURLs(taUrls, xls, session, progress_callback):
         current_sheet = xls.sheet_names[ind]
         df = pd.read_excel(xls, sheet_name = current_sheet)
         totalScrapes = len(sheetList)
+        
 
         with concurrent.futures.ThreadPoolExecutor() as executor:
-                futures = {executor.submit(processURL, url, session, df): url for url in sheetList}
+            futures = {executor.submit(processURL, url, session, df): url for url in sheetList}
 
-                for future in concurrent.futures.as_completed(futures):
-                    completedScrapes += 1
-                    progress = (completedScrapes / totalScrapes) * 100
-                    logging.info(f"Progress - {progress}%")
-                    progress_callback(f"Loading...{progress}%", progress)
+            for future in concurrent.futures.as_completed(futures):
+                if stop_flag:
+                    break
+                completedScrapes += 1
+                progress = (completedScrapes / totalScrapes) * 100
+                logging.info(f"Progress - {progress}%")
+                progress_callback(f"Loading...{progress}%", progress)
 
+            executor.shutdown(wait=True)  # This ensures that all threads finish before the program exits
+
+            if not stop_flag:
                 updateExcel(df, xls, current_sheet)
     logging.info("--- %s seconds ---" % (time.time() - start_time))
     return companies
@@ -190,7 +196,8 @@ def generateXLSheet(inputPath, progress_callback):
     try:
         companies = extractTAExcel(inputPath, progress_callback)
         outputPath = inputPath.parent / Path(f"{inputPath.stem}_ScrapedPDFs.xlsx")
-        saveCompanyandPDFs(companies, outputPath, progress_callback)
+        if not stop_flag:
+            saveCompanyandPDFs(companies, outputPath, progress_callback)
     except Exception as e:
         logging.exception(f"Error generating Excel sheet: {e}")
         raise e
@@ -250,7 +257,6 @@ def addCompanyLinks(inputPath):
             companyHotlinks[company]= fileDirectory
 
     
-    # with concurrent.futures.ThreadPoolExecutor(max_workers=10) as executor:
     with concurrent.futures.ThreadPoolExecutor() as executor:
         executor.map(downloadAndSave, dfCompany['Company'])
     
@@ -310,7 +316,7 @@ def extractPDFPages(inputPath, progress_callback):
         refresh_event.set()
 
     # Start a thread to refresh Excel
-    refresh_thread = threading.Thread(target=refresh_and_set_event, args=(inputPath,))
+    refresh_thread = threading.Thread(target=refresh_and_set_event, args=(inputPath,), daemon= True)
     refresh_thread.start()
     logging.info("Thread started")
 
@@ -364,9 +370,12 @@ def extractPDFPages(inputPath, progress_callback):
         futures = {executor.submit(downloadAndSave, data): data for data in zip(dfPDF['PDF URL'], dfPDF['PDF Title'], dfPDF['Company'])}
 
         for future in concurrent.futures.as_completed(futures):
-            completedSaves+=1
-            progress = (completedSaves/ totalSaves) * 100
-            progress_callback(f"Loading...{progress}%", progress)
+            if stop_flag:
+                break
+            else:
+                completedSaves+=1
+                progress = (completedSaves/ totalSaves) * 100
+                progress_callback(f"Loading...{progress}%", progress)
             
     # Update 'Local FilePath' column based on the corresponding pdfURL
     dfPDF['Local FilePath'] = dfPDF['PDF URL'].map(localFilePaths)
@@ -401,4 +410,8 @@ def handleDownload(inputPath, progress_callback):
         logging.error(f"Download error: {e}")
         raise e
 
+def stopProcessing():
+    global stop_flag
+    stop_flag = True
+    stopProcessingScraper()
 

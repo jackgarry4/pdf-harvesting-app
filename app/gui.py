@@ -1,13 +1,15 @@
 import tkinter
-from app.backend import handleScraping, handleDownload
+from app.backend import handleScraping, handleDownload, stopProcessing
 import logging 
 from pathlib import Path
 from threading import Thread, Event
 from tkinter import ttk
 import pythoncom
+import time
+import threading
 
 
-
+stop_flag = False
 
 class PDFHarvestingApp:
     def __init__(self, window):
@@ -58,6 +60,7 @@ class PDFHarvestingApp:
 
     def on_close(self):
         logging.info("Exiting Program")
+        stopProcessing()
         self.window.destroy()
 
 
@@ -72,6 +75,7 @@ class PDFHarvestingApp:
 
         self.updateTopProgress("Loading...", 0)
 
+        logging.info(f"handlePDFscraping Thread: {threading.current_thread()}")
         try:
             handleScraping(Path(self.TAURLFileEntry.get()), self.updateTopProgress)
             resultText = "Successfully scraped! Check for ScrapedPDFs file in parent directory"
@@ -133,23 +137,30 @@ class PDFHarvestingApp:
 
 
     def updateBottomProgress(self, resultText, value, textColor = "black"):
-        if (value > 0):
-            self.bottomProgressBar.config(length = 200)
-        else:
-            self.bottomProgressBar.config(length = 0)
-        self.bottomResultLabel.config(text = resultText, fg = textColor)
-        self.bottomProgressBar['value'] = value
-        self.window.update()
+        try:
+            if (value > 0):
+                self.bottomProgressBar.config(length = 200)
+            else:
+                self.bottomProgressBar.config(length = 0)
+            self.bottomResultLabel.config(text = resultText, fg = textColor)
+            self.bottomProgressBar['value'] = value
+            self.window.update()
+        except Exception as e:
+            logging.error(e)
+
         
 
     def updateTopProgress(self, resultText, value, textColor = "black"):
-        if (value > 0):
-            self.topProgressBar.config(length = 200)
-        else:
-            self.topProgressBar.config(length = 0)
-        self.topResultLabel.config(text = resultText, fg = textColor)
-        self.topProgressBar['value'] = value
-        self.window.update()
+        try:
+            if (value > 0):
+                self.topProgressBar.config(length = 200)
+            else:
+                self.topProgressBar.config(length = 0)
+            self.topResultLabel.config(text = resultText, fg = textColor)
+            self.topProgressBar['value'] = value
+            self.window.update()
+        except Exception as e:
+            logging.error(e)
         
 
     def start_thread(self, func):
