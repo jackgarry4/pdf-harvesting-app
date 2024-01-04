@@ -7,10 +7,10 @@ import re
 import logging
 import time
 
+MAX_RETRIES = 3
 
 
-
-def fetchDataFromURL(url, session, max_retries = 3):
+def fetchDataFromURL(url, session, max_retries = MAX_RETRIES):
 
     """
     Make an HTTP request to the provided URL and return the HTML response as a string.
@@ -34,24 +34,19 @@ def fetchDataFromURL(url, session, max_retries = 3):
             return {'data': pageData.text, 'error': None}
         except requests.exceptions.HTTPError as errh:
             logging.warning(f'HTTP Error on attempt {attempt+1} : {errh}. Failed to fetch data from {url}. ')
-            time.sleep(waitTime)
-            continue
         except requests.exceptions.ConnectionError as errc:
             logging.warning(f'Error Connecting on attempt {attempt+1}: {errc}. Failed to fetch data from {url}.')
-            time.sleep(waitTime)
-            continue
         except requests.exceptions.Timeout as errt:
             logging.warning(f'Timeout Error on attempt {attempt+1}: {errt}. Failed to fetch data from {url}.')
-            time.sleep(waitTime)
-            continue
         except requests.exceptions.RequestException as e: 
             logging.warning(f'Oops on attempt {attempt+1}: Something else {e}. Failed to fetch data from {url}.')
-            time.sleep(waitTime)
-            continue
+        time.sleep(waitTime)
+    
+    #Log the final error message when maximum retries are reached
+    logging.error(f'Max retries reached.  Failed to fetch data from {url}')
     return {'data': None, 'error': f'Max retries reached.  Failed to fetch data from {url}'}
     
 
-#Extract the company name from the html and return
 def extractCompanyName(doc):
     """
     Extract and return company name from HTML document if present.
@@ -67,11 +62,10 @@ def extractCompanyName(doc):
     try:
         return doc.h2.b.string
     except AttributeError as e:
-        logging.info(f'Attribute error in extractCompanyName: {e}')
+        logging.debug(f'Attribute error in extractCompanyName: {e}')
         return None
     
 
-#Extract URL using reg ex from JS openWindow method call
 def extractUrlFromExpression(pdfUrlJS):
     """
     Extract URL using regex from JavaScript openWindow method call.
@@ -90,10 +84,11 @@ def extractUrlFromExpression(pdfUrlJS):
 
     #Check if a match is found
     if match and match.group(1):
-        #Extracted URL is in the first capture group 
-        return match.group(1)
+        extractedUrl = match.group(1)
+        logging.info(f'URL extracted successfully: {extractedUrl}')
+        return extractedUrl
     else:
-        #Return None if no match is found
+        logging.warning(f'No URL match is found in the expression {pdfUrlJS}')
         return None
 
 
@@ -106,27 +101,30 @@ def extractPDFs(company, doc):
     - doc (BeautifulSoup): The BeautifulSoup object representing the HTML document.
 
     Returns:
-    - Company: The Company object with the added PDFs.
-
-    This method searches for the 'planDocuments' section in the HTML document and extracts PDF information
-    from the anchor tags within that section. For each anchor tag, it obtains the PDF URL and title, creates
-    a PDF object, and adds it to the provided Company.
+    - tuple: A tuple containing a Company object (if successful) and an error message (if an error occurs).
+      - If the extraction is successful, the first element is a Company object.
+      - If there's an error during the extraction, the first element is None, and the second element is an error message.
     """
     try: 
         planDocsHTML = doc.find(id='planDocuments')
         if planDocsHTML:
-            anchorInstances = planDocsHTML.find_all('a')
-            for a in anchorInstances:
+            pdfAnchors = planDocsHTML.find_all('a')
+            for a in pdfAnchors:
                 try:
                     pdfUrlJS = a['href']
                     pdfUrl = extractUrlFromExpression(pdfUrlJS)
-                    pdfTitle = a.find('li').text
+                    pdfTitleTag = a.find('li')
+                    pdfTitle = pdfTitleTag.text if pdfTitleTag else "Untitled PDF"
+
                     company.add_pdf(pdfUrl, pdfTitle)
                 except (AttributeError, KeyError, IndexError) as e:
-                    logging.error(f"Error extracting PDF information {company}")
+                    logging.error(f"Error extracting PDF information {company}: {e}")
+                    return None, f"Error extracting PDF information {company}: {e}"
+
+            return company, None
     except Exception as e:
         logging.error(f"Error extracting PDFs {company}: {e}")
-    return company
+        return None, f"Error extracting PDFs: {e}"
 
 
 def findValidDoc(homePageUrl, session, recursionDepth = 0):
@@ -198,14 +196,19 @@ def scrape_pdf_links(homePageUrl, session):
     """
     logging.info(f"Scraping {homePageUrl}")
     doc = findValidDoc(homePageUrl, session)
+
     if doc is not None:
         docTitle = doc.head.title.string
         if docTitle == "Fund and Fee Information":
             companyName = extractCompanyName(doc)
             company = Company(companyName)
             logging.info(f"Scraped {homePageUrl}")
-            company = extractPDFs(company, doc)
-            if len(company.pdfs) == 0:
+
+            company, pdfErrorMessage = extractPDFs(company, doc)
+
+            if pdfErrorMessage:
+                return None, pdfErrorMessage
+            elif not company.pdfs:
                 return None, "This page does not contain any Plan Documents"
             else: 
                 return company, None
@@ -213,6 +216,6 @@ def scrape_pdf_links(homePageUrl, session):
             logging.info(f"{homePageUrl} does not appear to be a valid TA page")
             return None, "This page does not appear to be a valid TA Page"
     else:
-        return None, f"Error fetching"
+        return None, f"Error fetching {homePageUrl}"
 
 
