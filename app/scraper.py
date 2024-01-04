@@ -129,37 +129,42 @@ def extractPDFs(company, doc):
     return company
 
 
-def findValidDoc(homePageUrl, session):
+def findValidDoc(homePageUrl, session, recursionDepth = 0):
     try:
+        if recursionDepth >= 3:
+            logging.warning(f"Max recursion depth reached for {homePageUrl}. Aborting")
+            return None
+        
         pageHTML = fetchDataFromURL(homePageUrl, session)
-        if pageHTML['error'] is None:
-            doc = BeautifulSoup(pageHTML["data"], 'html.parser')
-            #Check to see if the account number exists and if not run fetchData again until it does
-            accountNumberTable = doc.find('table', {'style': 'background-color:#F8F8F8;border-width: thin;border-collapse:collapse;border-color:#DCDCDC'})
-            # Find the cell with the label "Account #:"
-            accountLabelCell = accountNumberTable.find('td', text='Account #:')
-            
-            try:
-                if accountLabelCell and accountLabelCell.find_next('td'):
-                    accountValue = accountLabelCell.find_next('td').text.strip()
-                    if accountValue:
-                        logging.info("Valid doc found")
-                        return doc
-                    else:
-                        logging.warning(f"Error: Invalid doc found {homePageUrl} (No Account Value).  Rerunning for correct output...")
-                        return findValidDoc(homePageUrl, session)
-                else: 
-                    logging.warning(f"Error: Invalid doc found {homePageUrl} (Error is not none) Rerunning for correct output...")
-                    return findValidDoc(homePageUrl, session) 
-            except Exception as e:
-                logging.error(f"Error extracting account value {homePageUrl}: {e}")
-                return None
-        else:
+
+        if pageHTML['error'] is not None:
             logging.error(pageHTML['error'])
             return None
+            
+        doc = BeautifulSoup(pageHTML["data"], 'html.parser')
+        #Check to see if the account number exists and if not run fetchData again until it does
+        accountNumberTable = doc.find('table', {'style': 'background-color:#F8F8F8;border-width: thin;border-collapse:collapse;border-color:#DCDCDC'})
+        # Find the cell with the label "Account #:"
+        accountLabelCell = accountNumberTable.find('td', text='Account #:')
+        
+        try:
+            if accountLabelCell and accountLabelCell.find_next('td'):
+                accountValue = accountLabelCell.find_next('td').text.strip()
+                if accountValue:
+                    logging.info("Valid doc found")
+                    return doc
+                else:
+                    logging.warning(f"Error: Invalid doc found {homePageUrl} (No Account Value).  Rerunning for correct output...")
+            else: 
+                logging.warning(f"Error: Invalid doc found {homePageUrl} (Error is not none) Rerunning for correct output...")
+        except Exception as e:
+            logging.error(f"Error extracting account value {homePageUrl}: {e}")
+
+        return findValidDoc(homePageUrl, session, recursionDepth + 1)  
+            
     except Exception as e:
         logging.error(f"Error fetching data from URL {homePageUrl}: {e}")
-        return findValidDoc(homePageUrl, session)
+        return findValidDoc(homePageUrl, session, recursionDepth + 1)
 
 
 
