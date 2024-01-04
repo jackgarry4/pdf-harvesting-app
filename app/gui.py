@@ -65,6 +65,12 @@ class PDFHarvestingApp:
 
 
     def handlePDFScraping(self):
+        """
+        Handle the PDF scraping process triggered by a button click in a Tkinter application.
+
+        Returns:
+            None
+        """
         pythoncom.CoInitialize()
 
         
@@ -101,6 +107,12 @@ class PDFHarvestingApp:
 
 
     def handlePDFDownloading(self):
+        """
+        Handle the PDF Downloading process triggered by a button click in a Tkinter application.
+        
+        Returns:
+            None
+        """
         # Ensure CoInitialize is called in the thread
         pythoncom.CoInitialize()
 
@@ -136,7 +148,44 @@ class PDFHarvestingApp:
         self.updateBottomProgress(resultText = resultText, value = 0, textColor = textColor)
 
 
+    def updateTopProgress(self, resultText, value, textColor = "black"):
+        """
+        Update the top progress bar and result label in the Tkinter application.
+
+        Parameters:
+        - resultText (str): The text to be displayed in the result label.
+        - value (int): The numerical value to set for the progress bar (0 to 100).
+        - textColor (str, optional): The color of the result label text (default is "black").
+
+        Returns:
+        None
+        """
+        try:
+            if (value > 0):
+                self.topProgressBar.config(length = 200)
+            else:
+                self.topProgressBar.config(length = 0)
+            self.topResultLabel.config(text = resultText, fg = textColor)
+            self.topProgressBar['value'] = value
+            self.window.update()
+        except Exception as e:
+            logging.error(e)
+
+
+
+
     def updateBottomProgress(self, resultText, value, textColor = "black"):
+        """
+        Update the bottom progress bar and result label in the Tkinter application.
+
+        Parameters:
+        - resultText (str): The text to be displayed in the result label.
+        - value (int): The numerical value to set for the progress bar (0 to 100).
+        - textColor (str, optional): The color of the result label text (default is "black").
+
+        Returns:
+        None
+        """
         try:
             if (value > 0):
                 self.bottomProgressBar.config(length = 200)
@@ -148,19 +197,6 @@ class PDFHarvestingApp:
         except Exception as e:
             logging.error(e)
 
-        
-
-    def updateTopProgress(self, resultText, value, textColor = "black"):
-        try:
-            if (value > 0):
-                self.topProgressBar.config(length = 200)
-            else:
-                self.topProgressBar.config(length = 0)
-            self.topResultLabel.config(text = resultText, fg = textColor)
-            self.topProgressBar['value'] = value
-            self.window.update()
-        except Exception as e:
-            logging.error(e)
         
 
     def start_thread(self, func):

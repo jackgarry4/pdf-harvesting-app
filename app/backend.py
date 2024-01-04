@@ -219,6 +219,8 @@ def downloadPDF(pdfURL,filePath, maxRetries = 3, retryDelay = 1):
     Returns:
     - bool: True if the PDF is successfully downloaded, False otherwise.
     """
+    if stop_flag:
+        return False
     retries = 0
     while retries < maxRetries:
         try:
@@ -243,6 +245,8 @@ def addCompanyLinks(inputPath):
     - None: The function adds hyperlinks to the Companies sheet and saves the modified Excel file.
     """
 
+    if stop_flag:
+        return None
     with pd.ExcelFile(inputPath, engine='openpyxl') as xls:
         dfCompany = pd.read_excel(xls, sheet_name='Companies')
 
@@ -259,6 +263,7 @@ def addCompanyLinks(inputPath):
     
     with concurrent.futures.ThreadPoolExecutor() as executor:
         executor.map(downloadAndSave, dfCompany['Company'])
+    
     
     dfCompany['Hotlink'] = dfCompany['Company'].map(companyHotlinks)
     dfCompany['Hotlink'] = dfCompany['Hotlink'].apply(lambda x: f'=HYPERLINK("{x}", "CLICK FOR FOLDER")')
@@ -324,6 +329,7 @@ def extractPDFPages(inputPath, progress_callback):
     refresh_event.wait()
     logging.info("Done refreshing")
   
+    refresh_thread.join()
     
     #Save PDF pages on excel document to local directory
     with pd.ExcelFile(inputPath, engine='openpyxl') as xls:
@@ -339,7 +345,7 @@ def extractPDFPages(inputPath, progress_callback):
 
         filePath = "null"
 
-        if pd.notna(company):    
+        if pd.notna(company) and not stop_flag:    
             fileDirectory = inputPath.parent / Path(company)
             #Create the local company directory if it does not exist
             if not os.path.exists(fileDirectory):
@@ -376,7 +382,12 @@ def extractPDFPages(inputPath, progress_callback):
                 completedSaves+=1
                 progress = (completedSaves/ totalSaves) * 100
                 progress_callback(f"Loading...{progress}%", progress)
-            
+        
+        executor.shutdown(wait=True)  # This ensures that all threads finish before the program exits
+
+    if stop_flag:
+        return None
+        
     # Update 'Local FilePath' column based on the corresponding pdfURL
     dfPDF['Local FilePath'] = dfPDF['PDF URL'].map(localFilePaths)
     dfPDF['Local FilePath'] = dfPDF['Local FilePath'].apply(lambda x: f'=HYPERLINK("{x}", "CLICK FOR FILE")')
