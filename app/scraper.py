@@ -130,6 +130,19 @@ def extractPDFs(company, doc):
 
 
 def findValidDoc(homePageUrl, session, recursionDepth = 0):
+    """
+    Fetches and parses HTML content from a given URL, searching for a valid document with an account number.
+
+    Args:
+        homePageUrl (str): The URL of the webpage to be fetched and parsed.
+        session: The session object used for making HTTP requests.
+        recursion_depth (int, optional): The current depth of recursion (default is 0).
+
+    Returns:
+        BeautifulSoup object or None: 
+            - Returns a BeautifulSoup object if a valid document is found.
+            - Returns None if a valid document is not found after reaching the maximum recursion depth.
+    """
     try:
         if recursionDepth >= 3:
             logging.warning(f"Max recursion depth reached for {homePageUrl}. Aborting")
